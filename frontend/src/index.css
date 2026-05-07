@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-text-main font-mono antialiased;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-panel border border-surface rounded p-4;
+  }
+
+  .terminal-input {
+    @apply bg-surface border border-[#333] rounded px-3 py-2 text-text-main focus:outline-none focus:border-signal-green;
+  }
+
+  .terminal-button {
+    @apply bg-surface border border-[#333] text-text-main px-4 py-2 rounded hover:border-signal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+}

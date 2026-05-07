@@ -1,0 +1,11 @@
+
+   ____    __
+  / __/___/ /  ___
+ / _// __/ _ \/ _ \
+/___/\__/_//_/\___/ v4.15.2
+High performance, minimalist Go web framework
+https://echo.labstack.com
+____________________________________O/_______
+                                    O\
+⇨ http server started on [::]:8080
+{"time":"2026-05-07T22:20:33.097883361Z","id":"","remote_ip":"::1","host":"localhost:8080","method":"GET","uri":"/api/v1/health","user_agent":"curl/8.5.0","status":200,"error":"","latency":51971,"latency_human":"51.971µs","bytes_in":0,"bytes_out":16}
