@@ -3,10 +3,15 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"blackgrid/internal/api/handlers"
 	"blackgrid/internal/db"
+	"blackgrid/internal/monitor"
 	"blackgrid/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -40,6 +45,12 @@ func main() {
 	deviceSvc := service.NewDeviceService(queries)
 
 	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc)
+
+	monitorRunner := monitor.NewRunner(queries)
+	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10)
+	monitorScheduler.Start()
+
+	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner)
 
 	v1 := e.Group("/api/v1")
 
@@ -81,5 +92,33 @@ func main() {
 	v1.PUT("/devices/:id", h.UpdateDevice)
 	v1.DELETE("/devices/:id", h.DeleteDevice)
 
-	e.Logger.Fatal(e.Start(":8080"))
+	// Monitors
+	v1.GET("/monitors", monitorHandler.GetMonitors)
+	v1.GET("/monitors/:id", monitorHandler.GetMonitor)
+	v1.POST("/monitors", monitorHandler.CreateMonitor)
+	v1.PATCH("/monitors/:id", monitorHandler.UpdateMonitor)
+	v1.DELETE("/monitors/:id", monitorHandler.DeleteMonitor)
+	v1.POST("/monitors/:id/pause", monitorHandler.PauseMonitor)
+	v1.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor)
+	v1.POST("/monitors/:id/test", monitorHandler.TestMonitor)
+	v1.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
+
+	// Graceful shutdown
+	go func() {
+		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
+			e.Logger.Fatal("shutting down the server")
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	monitorScheduler.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
 }

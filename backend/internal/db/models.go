@@ -75,14 +75,23 @@ type IpAddress struct {
 }
 
 type Monitor struct {
-	ID              pgtype.UUID
-	Name            string
-	Type            string
-	Target          string
-	IntervalSeconds pgtype.Int4
-	Status          pgtype.Text
-	CreatedAt       pgtype.Timestamptz
-	UpdatedAt       pgtype.Timestamptz
+	ID                 pgtype.UUID
+	Name               string
+	Slug               string
+	MonitorType        string
+	Target             string
+	Config             []byte
+	IpAddressID        pgtype.UUID
+	DeviceID           pgtype.UUID
+	IntervalSeconds    int32
+	TimeoutSeconds     int32
+	RetryCount         int32
+	Enabled            bool
+	Status             string
+	LastCheckedAt      pgtype.Timestamptz
+	LastStatusChangeAt pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
 }
 
 type MonitorResult struct {

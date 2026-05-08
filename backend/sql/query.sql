@@ -79,3 +79,35 @@ UPDATE devices SET name = $2, site_id = $3, description = $4, status = $5, updat
 
 -- name: DeleteDevice :exec
 DELETE FROM devices WHERE id = $1;
+
+-- name: GetMonitors :many
+SELECT * FROM monitors ORDER BY name;
+
+-- name: GetMonitor :one
+SELECT * FROM monitors WHERE id = $1 LIMIT 1;
+
+-- name: CreateMonitor :one
+INSERT INTO monitors (name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+
+-- name: UpdateMonitor :one
+UPDATE monitors
+SET name = $2, slug = $3, monitor_type = $4, target = $5, config = $6, ip_address_id = $7, device_id = $8, interval_seconds = $9, timeout_seconds = $10, retry_count = $11, enabled = $12, status = $13, last_checked_at = $14, last_status_change_at = $15, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 RETURNING *;
+
+-- name: DeleteMonitor :exec
+DELETE FROM monitors WHERE id = $1;
+
+-- name: GetMonitorsDueForCheck :many
+SELECT * FROM monitors
+WHERE enabled = true
+  AND status != 'paused'
+  AND (last_checked_at IS NULL OR last_checked_at < CURRENT_TIMESTAMP - (interval_seconds || ' seconds')::interval)
+ORDER BY last_checked_at ASC NULLS FIRST;
+
+-- name: GetMonitorResults :many
+SELECT * FROM monitor_results WHERE monitor_id = $1 ORDER BY checked_at DESC LIMIT $2 OFFSET $3;
+
+-- name: CreateMonitorResult :one
+INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message)
+VALUES ($1, $2, $3, $4) RETURNING *;
