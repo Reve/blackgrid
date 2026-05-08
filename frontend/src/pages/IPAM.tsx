@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { getPrefixes, getIPAddresses, Prefix, IPAddress } from '../api/client';
+import { useEffect, useState } from 'react';
+import { getPrefixes, getIPAddresses } from '../api/client';
+import type { Prefix, IPAddress } from '../api/client';
 
 export default function IPAM() {
   const [prefixes, setPrefixes] = useState<Prefix[]>([]);

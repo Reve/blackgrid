@@ -16,10 +16,10 @@ INSERT INTO devices (name, site_id, description, status) VALUES ($1, $2, $3, $4)
 `
 
 type CreateDeviceParams struct {
-	Name        string
-	SiteID      pgtype.UUID
-	Description pgtype.Text
-	Status      pgtype.Text
+	Name        string      `json:"name"`
+	SiteID      pgtype.UUID `json:"site_id"`
+	Description pgtype.Text `json:"description"`
+	Status      pgtype.Text `json:"status"`
 }
 
 func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Device, error) {
@@ -43,15 +43,15 @@ func (q *Queries) CreateDevice(ctx context.Context, arg CreateDeviceParams) (Dev
 }
 
 const createIPAddress = `-- name: CreateIPAddress :one
-INSERT INTO ip_addresses (prefix_id, ip_address, interface_id, status, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at
+INSERT INTO ip_addresses (prefix_id, ip_address, interface_id, status, description) VALUES ($1, $2, $3, $4, $5) RETURNING id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at, last_seen_at
 `
 
 type CreateIPAddressParams struct {
-	PrefixID    pgtype.UUID
-	IpAddress   string
-	InterfaceID pgtype.UUID
-	Status      pgtype.Text
-	Description pgtype.Text
+	PrefixID    pgtype.UUID `json:"prefix_id"`
+	IpAddress   string      `json:"ip_address"`
+	InterfaceID pgtype.UUID `json:"interface_id"`
+	Status      pgtype.Text `json:"status"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) CreateIPAddress(ctx context.Context, arg CreateIPAddressParams) (IpAddress, error) {
@@ -72,19 +72,20 @@ func (q *Queries) CreateIPAddress(ctx context.Context, arg CreateIPAddressParams
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const createPrefix = `-- name: CreatePrefix :one
-INSERT INTO prefixes (site_id, vlan_id, prefix, description) VALUES ($1, $2, $3, $4) RETURNING id, site_id, vlan_id, prefix, description, created_at, updated_at
+INSERT INTO prefixes (site_id, vlan_id, prefix, description) VALUES ($1, $2, $3, $4) RETURNING id, site_id, vlan_id, prefix, description, created_at, updated_at, scan_enabled, scan_interval_seconds
 `
 
 type CreatePrefixParams struct {
-	SiteID      pgtype.UUID
-	VlanID      pgtype.UUID
-	Prefix      string
-	Description pgtype.Text
+	SiteID      pgtype.UUID `json:"site_id"`
+	VlanID      pgtype.UUID `json:"vlan_id"`
+	Prefix      string      `json:"prefix"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) CreatePrefix(ctx context.Context, arg CreatePrefixParams) (Prefix, error) {
@@ -103,6 +104,8 @@ func (q *Queries) CreatePrefix(ctx context.Context, arg CreatePrefixParams) (Pre
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScanEnabled,
+		&i.ScanIntervalSeconds,
 	)
 	return i, err
 }
@@ -112,8 +115,8 @@ INSERT INTO sites (name, description) VALUES ($1, $2) RETURNING id, name, descri
 `
 
 type CreateSiteParams struct {
-	Name        string
-	Description pgtype.Text
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) CreateSite(ctx context.Context, arg CreateSiteParams) (Site, error) {
@@ -134,10 +137,10 @@ INSERT INTO vlans (site_id, vlan_id, name, description) VALUES ($1, $2, $3, $4) 
 `
 
 type CreateVlanParams struct {
-	SiteID      pgtype.UUID
-	VlanID      int32
-	Name        string
-	Description pgtype.Text
+	SiteID      pgtype.UUID `json:"site_id"`
+	VlanID      int32       `json:"vlan_id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) CreateVlan(ctx context.Context, arg CreateVlanParams) (Vlan, error) {
@@ -257,7 +260,7 @@ func (q *Queries) GetDevices(ctx context.Context) ([]Device, error) {
 }
 
 const getIPAddress = `-- name: GetIPAddress :one
-SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at FROM ip_addresses WHERE id = $1 LIMIT 1
+SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at, last_seen_at FROM ip_addresses WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetIPAddress(ctx context.Context, id pgtype.UUID) (IpAddress, error) {
@@ -272,12 +275,13 @@ func (q *Queries) GetIPAddress(ctx context.Context, id pgtype.UUID) (IpAddress, 
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const getIPAddresses = `-- name: GetIPAddresses :many
-SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at FROM ip_addresses ORDER BY ip_address
+SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at, last_seen_at FROM ip_addresses ORDER BY ip_address
 `
 
 func (q *Queries) GetIPAddresses(ctx context.Context) ([]IpAddress, error) {
@@ -298,6 +302,7 @@ func (q *Queries) GetIPAddresses(ctx context.Context) ([]IpAddress, error) {
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LastSeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -310,7 +315,7 @@ func (q *Queries) GetIPAddresses(ctx context.Context) ([]IpAddress, error) {
 }
 
 const getIPAddressesByPrefix = `-- name: GetIPAddressesByPrefix :many
-SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at FROM ip_addresses WHERE prefix_id = $1 ORDER BY ip_address
+SELECT id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at, last_seen_at FROM ip_addresses WHERE prefix_id = $1 ORDER BY ip_address
 `
 
 func (q *Queries) GetIPAddressesByPrefix(ctx context.Context, prefixID pgtype.UUID) ([]IpAddress, error) {
@@ -331,6 +336,7 @@ func (q *Queries) GetIPAddressesByPrefix(ctx context.Context, prefixID pgtype.UU
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LastSeenAt,
 		); err != nil {
 			return nil, err
 		}
@@ -343,7 +349,7 @@ func (q *Queries) GetIPAddressesByPrefix(ctx context.Context, prefixID pgtype.UU
 }
 
 const getPrefix = `-- name: GetPrefix :one
-SELECT id, site_id, vlan_id, prefix, description, created_at, updated_at FROM prefixes WHERE id = $1 LIMIT 1
+SELECT id, site_id, vlan_id, prefix, description, created_at, updated_at, scan_enabled, scan_interval_seconds FROM prefixes WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetPrefix(ctx context.Context, id pgtype.UUID) (Prefix, error) {
@@ -357,12 +363,14 @@ func (q *Queries) GetPrefix(ctx context.Context, id pgtype.UUID) (Prefix, error)
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScanEnabled,
+		&i.ScanIntervalSeconds,
 	)
 	return i, err
 }
 
 const getPrefixes = `-- name: GetPrefixes :many
-SELECT id, site_id, vlan_id, prefix, description, created_at, updated_at FROM prefixes ORDER BY prefix
+SELECT id, site_id, vlan_id, prefix, description, created_at, updated_at, scan_enabled, scan_interval_seconds FROM prefixes ORDER BY prefix
 `
 
 func (q *Queries) GetPrefixes(ctx context.Context) ([]Prefix, error) {
@@ -382,6 +390,8 @@ func (q *Queries) GetPrefixes(ctx context.Context) ([]Prefix, error) {
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ScanEnabled,
+			&i.ScanIntervalSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -496,11 +506,11 @@ UPDATE devices SET name = $2, site_id = $3, description = $4, status = $5, updat
 `
 
 type UpdateDeviceParams struct {
-	ID          pgtype.UUID
-	Name        string
-	SiteID      pgtype.UUID
-	Description pgtype.Text
-	Status      pgtype.Text
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	SiteID      pgtype.UUID `json:"site_id"`
+	Description pgtype.Text `json:"description"`
+	Status      pgtype.Text `json:"status"`
 }
 
 func (q *Queries) UpdateDevice(ctx context.Context, arg UpdateDeviceParams) (Device, error) {
@@ -525,16 +535,16 @@ func (q *Queries) UpdateDevice(ctx context.Context, arg UpdateDeviceParams) (Dev
 }
 
 const updateIPAddress = `-- name: UpdateIPAddress :one
-UPDATE ip_addresses SET prefix_id = $2, ip_address = $3, interface_id = $4, status = $5, description = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at
+UPDATE ip_addresses SET prefix_id = $2, ip_address = $3, interface_id = $4, status = $5, description = $6, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, prefix_id, ip_address, interface_id, status, description, created_at, updated_at, last_seen_at
 `
 
 type UpdateIPAddressParams struct {
-	ID          pgtype.UUID
-	PrefixID    pgtype.UUID
-	IpAddress   string
-	InterfaceID pgtype.UUID
-	Status      pgtype.Text
-	Description pgtype.Text
+	ID          pgtype.UUID `json:"id"`
+	PrefixID    pgtype.UUID `json:"prefix_id"`
+	IpAddress   string      `json:"ip_address"`
+	InterfaceID pgtype.UUID `json:"interface_id"`
+	Status      pgtype.Text `json:"status"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) UpdateIPAddress(ctx context.Context, arg UpdateIPAddressParams) (IpAddress, error) {
@@ -556,20 +566,21 @@ func (q *Queries) UpdateIPAddress(ctx context.Context, arg UpdateIPAddressParams
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const updatePrefix = `-- name: UpdatePrefix :one
-UPDATE prefixes SET site_id = $2, vlan_id = $3, prefix = $4, description = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, site_id, vlan_id, prefix, description, created_at, updated_at
+UPDATE prefixes SET site_id = $2, vlan_id = $3, prefix = $4, description = $5, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING id, site_id, vlan_id, prefix, description, created_at, updated_at, scan_enabled, scan_interval_seconds
 `
 
 type UpdatePrefixParams struct {
-	ID          pgtype.UUID
-	SiteID      pgtype.UUID
-	VlanID      pgtype.UUID
-	Prefix      string
-	Description pgtype.Text
+	ID          pgtype.UUID `json:"id"`
+	SiteID      pgtype.UUID `json:"site_id"`
+	VlanID      pgtype.UUID `json:"vlan_id"`
+	Prefix      string      `json:"prefix"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) UpdatePrefix(ctx context.Context, arg UpdatePrefixParams) (Prefix, error) {
@@ -589,6 +600,8 @@ func (q *Queries) UpdatePrefix(ctx context.Context, arg UpdatePrefixParams) (Pre
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScanEnabled,
+		&i.ScanIntervalSeconds,
 	)
 	return i, err
 }
@@ -598,9 +611,9 @@ UPDATE sites SET name = $2, description = $3, updated_at = CURRENT_TIMESTAMP WHE
 `
 
 type UpdateSiteParams struct {
-	ID          pgtype.UUID
-	Name        string
-	Description pgtype.Text
+	ID          pgtype.UUID `json:"id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) UpdateSite(ctx context.Context, arg UpdateSiteParams) (Site, error) {
@@ -621,11 +634,11 @@ UPDATE vlans SET site_id = $2, vlan_id = $3, name = $4, description = $5, update
 `
 
 type UpdateVlanParams struct {
-	ID          pgtype.UUID
-	SiteID      pgtype.UUID
-	VlanID      int32
-	Name        string
-	Description pgtype.Text
+	ID          pgtype.UUID `json:"id"`
+	SiteID      pgtype.UUID `json:"site_id"`
+	VlanID      int32       `json:"vlan_id"`
+	Name        string      `json:"name"`
+	Description pgtype.Text `json:"description"`
 }
 
 func (q *Queries) UpdateVlan(ctx context.Context, arg UpdateVlanParams) (Vlan, error) {

@@ -38,8 +38,12 @@ func main() {
 	prefixSvc := service.NewPrefixService(queries)
 	ipSvc := service.NewIPAddressService(queries)
 	deviceSvc := service.NewDeviceService(queries)
+	discoverySvc := service.NewDiscoveryService(queries)
 
-	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc)
+	// Start background scheduled scans
+	go discoverySvc.RunScheduledScans(context.Background())
+
+	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc)
 
 	v1 := e.Group("/api/v1")
 
@@ -80,6 +84,15 @@ func main() {
 	v1.POST("/devices", h.CreateDevice)
 	v1.PUT("/devices/:id", h.UpdateDevice)
 	v1.DELETE("/devices/:id", h.DeleteDevice)
+
+	// Discovery
+	v1.GET("/discovery/scans", h.GetScans)
+	v1.POST("/discovery/scans", h.StartScan)
+	v1.GET("/discovery/scans/:id", h.GetScan)
+	v1.GET("/discovery/results", h.GetDiscoveryResults)
+	v1.POST("/discovery/results/:id/accept", h.AcceptDiscoveryResult)
+	v1.POST("/discovery/results/:id/ignore", h.IgnoreDiscoveryResult)
+	v1.POST("/prefixes/:id/scan", h.StartPrefixScan)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
