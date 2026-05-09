@@ -84,6 +84,8 @@ Body: `{ "scan_enabled": bool, "scan_interval_seconds": int }`
 ## Schemas
 
 ```ts
+type MonitorType = 'http' | 'tcp' | 'ping' | 'dns' | 'tls' | 'push' | 'postgres';
+
 type DiscoveryScan = {
   id: string;
   prefix_id: string;
@@ -114,7 +116,6 @@ type DiscoveryResult = {
   accepted_at: string | null;
   created_ip_address_id: string | null;
   created_at: string;
-  updated_at: string;
 };
 ```
 
@@ -314,3 +315,28 @@ Public-safe page representation. Returns `404` if the page does not exist OR is 
 ```
 
 The public response **never** includes monitor config, IP/device metadata, notification channels, raw check details, internal notes, or other private information.
+
+---
+
+# Push Heartbeats
+
+Passive monitoring endpoints.
+
+## `GET /push/{token}`
+## `POST /push/{token}`
+
+Accepts heartbeats from external scripts. Does not require user session auth; the token itself is the credential.
+Optional query/body parameters:
+- `status`: `up`, `down`, `degraded` (default: `up`)
+- `message`: human-readable status message
+- `latency_ms`: numerical latency in milliseconds
+
+## `POST /api/v1/monitors/{id}/rotate-push-token`
+Generates a new token for a push monitor. Returns the plaintext token once.
+```json
+{
+  "token": "...",
+  "message": "Push token rotated. Store this token securely; it will not be shown again.",
+  "push_url": "/push/..."
+}
+```

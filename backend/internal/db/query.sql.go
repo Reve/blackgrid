@@ -78,8 +78,8 @@ func (q *Queries) CreateIPAddress(ctx context.Context, arg CreateIPAddressParams
 }
 
 const createMonitor = `-- name: CreateMonitor :one
-INSERT INTO monitors (name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at
+INSERT INTO monitors (name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, push_token_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash
 `
 
 type CreateMonitorParams struct {
@@ -95,6 +95,7 @@ type CreateMonitorParams struct {
 	RetryCount      int32
 	Enabled         bool
 	Status          string
+	PushTokenHash   pgtype.Text
 }
 
 func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) (Monitor, error) {
@@ -111,6 +112,7 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) (M
 		arg.RetryCount,
 		arg.Enabled,
 		arg.Status,
+		arg.PushTokenHash,
 	)
 	var i Monitor
 	err := row.Scan(
@@ -131,13 +133,14 @@ func (q *Queries) CreateMonitor(ctx context.Context, arg CreateMonitorParams) (M
 		&i.LastStatusChangeAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PushTokenHash,
 	)
 	return i, err
 }
 
 const createMonitorResult = `-- name: CreateMonitorResult :one
-INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message)
-VALUES ($1, $2, $3, $4) RETURNING id, monitor_id, status, latency_ms, error_message, checked_at
+INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message, details)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, monitor_id, status, latency_ms, error_message, details, checked_at
 `
 
 type CreateMonitorResultParams struct {
@@ -145,6 +148,7 @@ type CreateMonitorResultParams struct {
 	Status       string
 	LatencyMs    pgtype.Int4
 	ErrorMessage pgtype.Text
+	Details      []byte
 }
 
 func (q *Queries) CreateMonitorResult(ctx context.Context, arg CreateMonitorResultParams) (MonitorResult, error) {
@@ -153,6 +157,7 @@ func (q *Queries) CreateMonitorResult(ctx context.Context, arg CreateMonitorResu
 		arg.Status,
 		arg.LatencyMs,
 		arg.ErrorMessage,
+		arg.Details,
 	)
 	var i MonitorResult
 	err := row.Scan(
@@ -161,6 +166,7 @@ func (q *Queries) CreateMonitorResult(ctx context.Context, arg CreateMonitorResu
 		&i.Status,
 		&i.LatencyMs,
 		&i.ErrorMessage,
+		&i.Details,
 		&i.CheckedAt,
 	)
 	return i, err
@@ -447,7 +453,7 @@ func (q *Queries) GetIPAddressesByPrefix(ctx context.Context, prefixID pgtype.UU
 }
 
 const getMonitor = `-- name: GetMonitor :one
-SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at FROM monitors WHERE id = $1 LIMIT 1
+SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash FROM monitors WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetMonitor(ctx context.Context, id pgtype.UUID) (Monitor, error) {
@@ -471,12 +477,13 @@ func (q *Queries) GetMonitor(ctx context.Context, id pgtype.UUID) (Monitor, erro
 		&i.LastStatusChangeAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PushTokenHash,
 	)
 	return i, err
 }
 
 const getMonitorResults = `-- name: GetMonitorResults :many
-SELECT id, monitor_id, status, latency_ms, error_message, checked_at FROM monitor_results WHERE monitor_id = $1 ORDER BY checked_at DESC LIMIT $2 OFFSET $3
+SELECT id, monitor_id, status, latency_ms, error_message, details, checked_at FROM monitor_results WHERE monitor_id = $1 ORDER BY checked_at DESC LIMIT $2 OFFSET $3
 `
 
 type GetMonitorResultsParams struct {
@@ -500,6 +507,7 @@ func (q *Queries) GetMonitorResults(ctx context.Context, arg GetMonitorResultsPa
 			&i.Status,
 			&i.LatencyMs,
 			&i.ErrorMessage,
+			&i.Details,
 			&i.CheckedAt,
 		); err != nil {
 			return nil, err
@@ -513,7 +521,7 @@ func (q *Queries) GetMonitorResults(ctx context.Context, arg GetMonitorResultsPa
 }
 
 const getMonitors = `-- name: GetMonitors :many
-SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at FROM monitors ORDER BY name
+SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash FROM monitors ORDER BY name
 `
 
 func (q *Queries) GetMonitors(ctx context.Context) ([]Monitor, error) {
@@ -543,6 +551,7 @@ func (q *Queries) GetMonitors(ctx context.Context) ([]Monitor, error) {
 			&i.LastStatusChangeAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PushTokenHash,
 		); err != nil {
 			return nil, err
 		}
@@ -555,7 +564,7 @@ func (q *Queries) GetMonitors(ctx context.Context) ([]Monitor, error) {
 }
 
 const getMonitorsDueForCheck = `-- name: GetMonitorsDueForCheck :many
-SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at FROM monitors
+SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash FROM monitors
 WHERE enabled = true
   AND status != 'paused'
   AND (last_checked_at IS NULL OR last_checked_at < CURRENT_TIMESTAMP - (interval_seconds || ' seconds')::interval)
@@ -589,6 +598,7 @@ func (q *Queries) GetMonitorsDueForCheck(ctx context.Context) ([]Monitor, error)
 			&i.LastStatusChangeAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PushTokenHash,
 		); err != nil {
 			return nil, err
 		}
@@ -825,8 +835,8 @@ func (q *Queries) UpdateIPAddress(ctx context.Context, arg UpdateIPAddressParams
 
 const updateMonitor = `-- name: UpdateMonitor :one
 UPDATE monitors
-SET name = $2, slug = $3, monitor_type = $4, target = $5, config = $6, ip_address_id = $7, device_id = $8, interval_seconds = $9, timeout_seconds = $10, retry_count = $11, enabled = $12, status = $13, last_checked_at = $14, last_status_change_at = $15, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 RETURNING id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at
+SET name = $2, slug = $3, monitor_type = $4, target = $5, config = $6, ip_address_id = $7, device_id = $8, interval_seconds = $9, timeout_seconds = $10, retry_count = $11, enabled = $12, status = $13, last_checked_at = $14, last_status_change_at = $15, push_token_hash = $16, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 RETURNING id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash
 `
 
 type UpdateMonitorParams struct {
@@ -845,6 +855,7 @@ type UpdateMonitorParams struct {
 	Status             string
 	LastCheckedAt      pgtype.Timestamptz
 	LastStatusChangeAt pgtype.Timestamptz
+	PushTokenHash      pgtype.Text
 }
 
 func (q *Queries) UpdateMonitor(ctx context.Context, arg UpdateMonitorParams) (Monitor, error) {
@@ -864,6 +875,7 @@ func (q *Queries) UpdateMonitor(ctx context.Context, arg UpdateMonitorParams) (M
 		arg.Status,
 		arg.LastCheckedAt,
 		arg.LastStatusChangeAt,
+		arg.PushTokenHash,
 	)
 	var i Monitor
 	err := row.Scan(
@@ -884,6 +896,7 @@ func (q *Queries) UpdateMonitor(ctx context.Context, arg UpdateMonitorParams) (M
 		&i.LastStatusChangeAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PushTokenHash,
 	)
 	return i, err
 }
@@ -977,4 +990,77 @@ func (q *Queries) UpdateVlan(ctx context.Context, arg UpdateVlanParams) (Vlan, e
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getMonitorByPushTokenHash = `-- name: GetMonitorByPushTokenHash :one
+SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash FROM monitors WHERE push_token_hash = $1 AND monitor_type = 'push' LIMIT 1
+`
+
+func (q *Queries) GetMonitorByPushTokenHash(ctx context.Context, hash string) (Monitor, error) {
+	row := q.db.QueryRow(ctx, getMonitorByPushTokenHash, hash)
+	var i Monitor
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.MonitorType,
+		&i.Target,
+		&i.Config,
+		&i.IpAddressID,
+		&i.DeviceID,
+		&i.IntervalSeconds,
+		&i.TimeoutSeconds,
+		&i.RetryCount,
+		&i.Enabled,
+		&i.Status,
+		&i.LastCheckedAt,
+		&i.LastStatusChangeAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PushTokenHash,
+	)
+	return i, err
+}
+
+const getMonitorsByType = `-- name: GetMonitorsByType :many
+SELECT id, name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, last_checked_at, last_status_change_at, created_at, updated_at, push_token_hash FROM monitors WHERE monitor_type = $1 ORDER BY name
+`
+
+func (q *Queries) GetMonitorsByType(ctx context.Context, monitorType string) ([]Monitor, error) {
+	rows, err := q.db.Query(ctx, getMonitorsByType, monitorType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Monitor
+	for rows.Next() {
+		var i Monitor
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.MonitorType,
+			&i.Target,
+			&i.Config,
+			&i.IpAddressID,
+			&i.DeviceID,
+			&i.IntervalSeconds,
+			&i.TimeoutSeconds,
+			&i.RetryCount,
+			&i.Enabled,
+			&i.Status,
+			&i.LastCheckedAt,
+			&i.LastStatusChangeAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PushTokenHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

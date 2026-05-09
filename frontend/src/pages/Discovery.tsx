@@ -128,11 +128,18 @@ export default function Discovery() {
 
   const handleCreateMonitor = (r: DiscoveryResult) => {
     const ports = r.open_ports || [];
-    let monitor_type: 'http' | 'tcp' = 'tcp';
+    let monitor_type: 'http' | 'tcp' | 'dns' | 'tls' | 'postgres' = 'tcp';
     let target = r.address;
-    if (ports.includes(443)) {
-      monitor_type = 'http';
-      target = `https://${r.address}`;
+
+    if (ports.includes(5432)) {
+      monitor_type = 'postgres';
+      target = `postgres://user:pass@${r.address}:5432/dbname`;
+    } else if (ports.includes(443)) {
+      monitor_type = 'tls';
+      target = r.address;
+    } else if (ports.includes(53) && (r.reverse_dns || r.hostname)) {
+      monitor_type = 'dns';
+      target = r.reverse_dns || r.hostname || r.address;
     } else if (ports.includes(80)) {
       monitor_type = 'http';
       target = `http://${r.address}`;
@@ -140,6 +147,7 @@ export default function Discovery() {
       monitor_type = 'tcp';
       target = `${r.address}:${ports[0]}`;
     }
+
     const params = new URLSearchParams({
       type: monitor_type,
       target,

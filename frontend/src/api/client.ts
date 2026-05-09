@@ -39,7 +39,7 @@ export interface Monitor {
   id: string;
   name: string;
   slug: string;
-  monitor_type: 'http' | 'tcp' | 'ping';
+  monitor_type: 'http' | 'tcp' | 'ping' | 'dns' | 'tls' | 'push' | 'postgres';
   target: string;
   config: Record<string, any> | null;
   ip_address_id: string | null;
@@ -59,6 +59,7 @@ export interface MonitorResult {
   status: string;
   latency_ms: number | null;
   error_message: string | null;
+  details: Record<string, any> | null;
   checked_at: string;
 }
 
@@ -71,6 +72,8 @@ export const pauseMonitor = (id: string) => api.post<Monitor>(`/monitors/${id}/p
 export const resumeMonitor = (id: string) => api.post<Monitor>(`/monitors/${id}/resume`);
 export const testMonitor = (id: string) => api.post<{ status: string, latency_ms: number, error_message?: string }>(`/monitors/${id}/test`);
 export const getMonitorResults = (id: string) => api.get<MonitorResult[]>(`/monitors/${id}/results`);
+export const rotatePushToken = (id: string) =>
+  api.post<{ token: string; message: string; push_url: string }>(`/monitors/${id}/rotate-push-token`);
 
 // Discovery
 export type DiscoveryClassification = 'known' | 'new' | 'changed' | 'duplicate' | 'stale' | 'ignored';

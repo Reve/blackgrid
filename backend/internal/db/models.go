@@ -192,6 +192,7 @@ type Monitor struct {
 	LastStatusChangeAt pgtype.Timestamptz
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+	PushTokenHash      pgtype.Text
 }
 
 type MonitorResult struct {
@@ -200,6 +201,7 @@ type MonitorResult struct {
 	Status       string             `json:"status"`
 	LatencyMs    pgtype.Int4        `json:"latency_ms"`
 	ErrorMessage pgtype.Text        `json:"error_message"`
+	Details      []byte             `json:"details"`
 	CheckedAt    pgtype.Timestamptz `json:"checked_at"`
 }
 

@@ -98,9 +98,8 @@ currently count as "not fully up" — they do not contribute to `up_count`.
 
 ## Phase scope
 
-Phase 5 deliberately does **not** include:
-
-- authentication or per-user access control
-- realtime updates over SSE/WebSocket (the public view polls every 30s)
-- Redis / multi-process coordination
-- per-region status regions or scheduled maintenance windows
+Phase 7 adds support for:
+- DNS, TLS, Push, and PostgreSQL monitor types.
+- Secret masking for sensitive configuration.
+- Detailed result visualization.
+- Token rotation for push heartbeats.

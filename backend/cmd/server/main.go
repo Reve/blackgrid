@@ -64,7 +64,7 @@ func main() {
 		discoverySvc.RunScheduledScans(schedCtx)
 	}()
 
-	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc)
+	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc, auditSvc)
 
 	incidentSvc := service.NewIncidentService(queries)
 	notificationSvc := service.NewNotificationService(queries)
@@ -75,7 +75,7 @@ func main() {
 	monitorScheduler.SetIncidentHook(service.NewIncidentHook(incidentSvc))
 	monitorScheduler.Start()
 
-	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner)
+	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner, auditSvc)
 	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
 	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
 
@@ -91,6 +91,10 @@ func main() {
 
 	// ---- Public status endpoint (no auth required) ----
 	e.GET("/status/:slug", statusPageHandler.PublicStatusPage)
+
+	// ---- Push heartbeat endpoint (token-authenticated, no user auth) ----
+	e.GET("/push/:token", monitorHandler.ReceivePushHeartbeat)
+	e.POST("/push/:token", monitorHandler.ReceivePushHeartbeat)
 
 	// ---- API v1 group ----
 	v1 := e.Group("/api/v1")
@@ -164,6 +168,7 @@ func main() {
 	api.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor, operatorMW)
 	api.POST("/monitors/:id/test", monitorHandler.TestMonitor, operatorMW)
 	api.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
+	api.POST("/monitors/:id/rotate-push-token", monitorHandler.RotatePushToken, operatorMW)
 
 	// Incidents
 	api.GET("/incidents", incidentHandler.ListIncidents)

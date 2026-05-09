@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"blackgrid/internal/db"
@@ -28,6 +29,16 @@ func (r *Runner) Run(ctx context.Context, monitor db.Monitor) (CheckResult, erro
 		checker = &TCPChecker{}
 	case "ping":
 		checker = &PingChecker{}
+	case "dns":
+		checker = &DNSChecker{}
+	case "tls":
+		checker = &TLSChecker{}
+	case "push":
+		// Push monitors are not actively probed by the runner.
+		// The scheduler uses a special overdue-check; active runs are skipped here.
+		checker = &PushChecker{}
+	case "postgres":
+		checker = &PostgresChecker{}
 	default:
 		return CheckResult{}, fmt.Errorf("unsupported monitor type: %s", monitor.MonitorType)
 	}
@@ -44,11 +55,18 @@ func (r *Runner) Run(ctx context.Context, monitor db.Monitor) (CheckResult, erro
 		latency = pgtype.Int4{Int32: result.LatencyMs, Valid: true}
 	}
 
+	var detailsBytes []byte
+	if result.Details != nil {
+		b, _ := json.Marshal(result.Details)
+		detailsBytes = b
+	}
+
 	_, err := r.queries.CreateMonitorResult(ctx, db.CreateMonitorResultParams{
 		MonitorID:    monitor.ID,
 		Status:       result.Status,
 		LatencyMs:    latency,
 		ErrorMessage: errorMsg,
+		Details:      detailsBytes,
 	})
 	if err != nil {
 		return result, fmt.Errorf("failed to store result: %w", err)

@@ -46,8 +46,14 @@ export default function Dashboard() {
   const downCount = monitors.filter(m => m.status === 'down').length;
   const pausedCount = monitors.filter(m => m.status === 'paused').length;
 
+  // Breakdown by type
+  const typeCounts = monitors.reduce((acc, m) => {
+      acc[m.monitor_type] = (acc[m.monitor_type] || 0) + 1;
+      return acc;
+  }, {} as Record<string, number>);
+
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-4 h-full overflow-auto">
       <h2 className="text-xl text-signal-green">System Overview</h2>
 
       <div className="grid grid-cols-4 gap-4">
@@ -63,6 +69,26 @@ export default function Dashboard() {
         <Card label="Paused" value={pausedCount} accent="text-text-muted" />
         <Card label="Total Monitors" value={monitors.length} accent="text-text-main" />
         <Card label="Status Pages" value={statusPages.length} accent="text-signal-green" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+          <div className="panel col-span-1">
+              <h3 className="text-sm text-text-muted uppercase mb-3">Monitor Types</h3>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {Object.entries(typeCounts).map(([type, count]) => (
+                      <div key={type} className="flex gap-2 text-xs">
+                          <span className="text-text-muted uppercase">{type}:</span>
+                          <span className="text-text-main font-bold">{count}</span>
+                      </div>
+                  ))}
+              </div>
+          </div>
+          <div className="panel col-span-2">
+              <h3 className="text-sm text-signal-amber uppercase mb-3">TLS Certificates Expiring Soon</h3>
+              <div className="text-xs text-text-muted italic">
+                  Feature coming soon (requires detailed result scanning).
+              </div>
+          </div>
       </div>
 
       <div className="panel">

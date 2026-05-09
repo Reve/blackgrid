@@ -20,6 +20,7 @@ type CheckResult struct {
 	Status       string
 	LatencyMs    int32
 	ErrorMessage string
+	Details      map[string]any
 }
 
 type Checker interface {

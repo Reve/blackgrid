@@ -11,6 +11,7 @@ type Handlers struct {
 	IPAddressService *service.IPAddressService
 	DeviceService    *service.DeviceService
 	DiscoveryService *service.DiscoveryService
+	AuditService     *service.AuditService
 }
 
 func New(
@@ -20,6 +21,7 @@ func New(
 	ipAddress *service.IPAddressService,
 	device *service.DeviceService,
 	discovery *service.DiscoveryService,
+	audit *service.AuditService,
 ) *Handlers {
 	return &Handlers{
 		SiteService:      site,
@@ -28,5 +30,6 @@ func New(
 		IPAddressService: ipAddress,
 		DeviceService:    device,
 		DiscoveryService: discovery,
+		AuditService:     audit,
 	}
 }

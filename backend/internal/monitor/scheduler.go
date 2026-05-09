@@ -178,6 +178,7 @@ func (s *Scheduler) executeCheck(m db.Monitor) {
 		Status:             newStatus,
 		LastCheckedAt:      now,
 		LastStatusChangeAt: lastStatusChangeAt,
+		PushTokenHash:      m.PushTokenHash,
 	})
 
 	if err != nil {

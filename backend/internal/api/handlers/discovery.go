@@ -152,6 +152,12 @@ func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	h.AuditService.Log(c.Request().Context(), service.AuditParams{
+		Action:     "accept_result",
+		EntityType: "discovery_result",
+		EntityID:   id,
+		After:      map[string]any{"ip_address": ip.IpAddress},
+	})
 	return c.JSON(http.StatusOK, ip)
 }
 
