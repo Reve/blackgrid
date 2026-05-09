@@ -62,12 +62,39 @@ type DiscoveryScan struct {
 }
 
 type Incident struct {
+	ID             pgtype.UUID        `json:"id"`
+	MonitorID      pgtype.UUID        `json:"monitor_id"`
+	Status         string             `json:"status"`
+	Severity       string             `json:"severity"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	AcknowledgedAt pgtype.Timestamptz `json:"acknowledged_at"`
+	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
+	Summary        string             `json:"summary"`
+	Details        pgtype.Text        `json:"details"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type NotificationChannel struct {
 	ID          pgtype.UUID        `json:"id"`
-	MonitorID   pgtype.UUID        `json:"monitor_id"`
-	Status      string             `json:"status"`
-	StartedAt   pgtype.Timestamptz `json:"started_at"`
-	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
-	Description pgtype.Text        `json:"description"`
+	Name        string             `json:"name"`
+	ChannelType string             `json:"channel_type"`
+	Enabled     bool               `json:"enabled"`
+	Config      []byte             `json:"config"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type NotificationDelivery struct {
+	ID        pgtype.UUID        `json:"id"`
+	ChannelID pgtype.UUID        `json:"channel_id"`
+	EventType string             `json:"event_type"`
+	Status    string             `json:"status"`
+	Attempts  int32              `json:"attempts"`
+	LastError pgtype.Text        `json:"last_error"`
+	Payload   []byte             `json:"payload"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	SentAt    pgtype.Timestamptz `json:"sent_at"`
 }
 
 type Interface struct {

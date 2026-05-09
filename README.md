@@ -1,6 +1,10 @@
 # Blackgrid
 
-Blackgrid is a homelab IPAM (IP Address Management) and endpoint monitoring application.
+Blackgrid is a homelab IPAM (IP Address Management) and endpoint monitoring
+application. Phase 3 adds **incident management** and **notification
+channels** (webhook, SMTP) so monitor failures turn into actionable alerts —
+see [docs/incidents.md](docs/incidents.md) and
+[docs/notifications.md](docs/notifications.md).
 
 ## Prerequisites
 
@@ -63,3 +67,19 @@ Default TCP probe ports: `22, 53, 80, 443, 5432, 6379, 8000, 8080, 9000, 9443`.
 IPv6 full-range scanning is unsupported. Inside Docker, ICMP and ARP/MAC
 discovery require additional capabilities; Blackgrid falls back to TCP-only
 discovery without them.
+
+## Incidents and notifications
+
+When a scheduled monitor transitions to `down` or `degraded`, Blackgrid opens
+an incident automatically and (if any notification channels are enabled)
+delivers an `incident.opened` event. Recovery (`up`) auto-resolves the
+incident and emits `incident.resolved`.
+
+- API reference: [docs/api.md](docs/api.md) (Incidents and Notification
+  channel sections).
+- Lifecycle rules: [docs/incidents.md](docs/incidents.md).
+- Channel config and event payloads: [docs/notifications.md](docs/notifications.md).
+
+Notification secrets (SMTP passwords, webhook bearer tokens) are stored as
+JSONB in PostgreSQL **without an additional encryption layer** in this phase
+— protect the database accordingly.

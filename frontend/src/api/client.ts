@@ -131,3 +131,78 @@ export const ignoreDiscoveryResult = (id: string) =>
 
 export const updatePrefixScanConfig = (id: string, body: { scan_enabled: boolean; scan_interval_seconds: number }) =>
   api.put<Prefix>(`/prefixes/${id}/scan-config`, body);
+
+// Incidents
+export type IncidentStatus = 'open' | 'acknowledged' | 'resolved';
+export type IncidentSeverity = 'info' | 'warning' | 'critical';
+
+export interface Incident {
+  id: string;
+  monitor_id: string;
+  status: IncidentStatus;
+  severity: IncidentSeverity;
+  started_at: string | null;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+  summary: string;
+  details: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface IncidentCounts {
+  open_count: number;
+  acknowledged_count: number;
+  critical_count: number;
+  resolved_24h_count: number;
+}
+
+export interface ListIncidentsParams {
+  status?: IncidentStatus;
+  severity?: IncidentSeverity;
+  monitor_id?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const listIncidents = (params?: ListIncidentsParams) =>
+  api.get<Incident[]>('/incidents', { params });
+export const getIncident = (id: string) => api.get<Incident>(`/incidents/${id}`);
+export const getIncidentCounts = () => api.get<IncidentCounts>('/incidents/counts');
+export const acknowledgeIncident = (id: string, note?: string) =>
+  api.post<Incident>(`/incidents/${id}/acknowledge`, { note: note ?? '' });
+export const resolveIncident = (id: string, note?: string) =>
+  api.post<Incident>(`/incidents/${id}/resolve`, { note: note ?? '' });
+
+// Notification channels
+export type ChannelType = 'webhook' | 'smtp';
+
+export interface NotificationChannel {
+  id: string;
+  name: string;
+  channel_type: ChannelType;
+  enabled: boolean;
+  config: Record<string, any>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CreateChannelInput {
+  name: string;
+  channel_type: ChannelType;
+  enabled?: boolean;
+  config: Record<string, any>;
+}
+
+export const listNotificationChannels = () =>
+  api.get<NotificationChannel[]>('/notification-channels');
+export const createNotificationChannel = (data: CreateChannelInput) =>
+  api.post<NotificationChannel>('/notification-channels', data);
+export const updateNotificationChannel = (id: string, data: Partial<CreateChannelInput>) =>
+  api.patch<NotificationChannel>(`/notification-channels/${id}`, data);
+export const deleteNotificationChannel = (id: string) =>
+  api.delete(`/notification-channels/${id}`);
+export const testNotificationChannel = (id: string) =>
+  api.post<{ status: string; event_type: string; error?: string; sent_at?: string }>(
+    `/notification-channels/${id}/test`,
+  );

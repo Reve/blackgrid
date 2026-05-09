@@ -117,3 +117,114 @@ type DiscoveryResult = {
   updated_at: string;
 };
 ```
+
+---
+
+# Incidents
+
+All endpoints are prefixed with `/api/v1`.
+
+## `GET /incidents`
+
+Query parameters (all optional):
+
+| Param | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `status` | `open`/`acknowledged`/`resolved` | — | |
+| `severity` | `info`/`warning`/`critical` | — | |
+| `monitor_id` | UUID | — | |
+| `limit` | int | `100` | |
+| `offset` | int | `0` | |
+
+Returns an array of `Incident` ordered by `started_at desc`.
+
+## `GET /incidents/{id}`
+
+Returns a single `Incident` or `404`.
+
+## `GET /incidents/counts`
+
+Returns dashboard tallies:
+```json
+{ "open_count": 0, "acknowledged_count": 0, "critical_count": 0, "resolved_24h_count": 0 }
+```
+
+## `POST /incidents/{id}/acknowledge`
+
+Body: `{ "note": "optional string" }`
+
+Behaviour:
+- If `open`, transitions to `acknowledged` and stamps `acknowledged_at`.
+- If already `acknowledged`, returns the current incident (idempotent).
+- If `resolved`, returns `409 Conflict`.
+
+## `POST /incidents/{id}/resolve`
+
+Body: `{ "note": "optional string" }`
+
+Behaviour:
+- If `open` or `acknowledged`, transitions to `resolved` and stamps `resolved_at`.
+- If already `resolved`, returns the current incident (idempotent).
+
+### `Incident` shape
+
+```ts
+type Incident = {
+  id: string;
+  monitor_id: string;
+  status: 'open' | 'acknowledged' | 'resolved';
+  severity: 'info' | 'warning' | 'critical';
+  started_at: string | null;
+  acknowledged_at: string | null;
+  resolved_at: string | null;
+  summary: string;
+  details: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+```
+
+---
+
+# Notification channels
+
+## `GET /notification-channels`
+Returns all channels with secrets masked.
+
+## `POST /notification-channels`
+Body:
+```json
+{
+  "name": "Ops",
+  "channel_type": "webhook",
+  "enabled": true,
+  "config": { "url": "https://example.local/hook", "method": "POST", "headers": {} }
+}
+```
+SMTP config:
+```json
+{
+  "host": "smtp.example.local",
+  "port": 587,
+  "username": "blackgrid@example.local",
+  "password": "secret",
+  "from": "blackgrid@example.local",
+  "to": ["admin@example.local"],
+  "use_tls": true
+}
+```
+
+## `GET /notification-channels/{id}`
+Returns a single channel (password masked as `********`).
+
+## `PATCH /notification-channels/{id}`
+Same shape as `POST`. For SMTP, omitting `password` (or sending the masked sentinel `********`) preserves the stored password.
+
+## `DELETE /notification-channels/{id}`
+Returns `204`.
+
+## `POST /notification-channels/{id}/test`
+Sends a test payload immediately and stores a delivery row. Returns:
+```json
+{ "status": "sent" | "failed", "event_type": "test", "error": "...", "sent_at": "..." }
+```

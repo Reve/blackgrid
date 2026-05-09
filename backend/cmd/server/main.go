@@ -56,11 +56,18 @@ func main() {
 
 	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc)
 
+	incidentSvc := service.NewIncidentService(queries)
+	notificationSvc := service.NewNotificationService(queries)
+	incidentSvc.SetNotifier(notificationSvc)
+
 	monitorRunner := monitor.NewRunner(queries)
 	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10)
+	monitorScheduler.SetIncidentHook(service.NewIncidentHook(incidentSvc))
 	monitorScheduler.Start()
 
 	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner)
+	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
+	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
 
 	v1 := e.Group("/api/v1")
 
@@ -122,6 +129,21 @@ func main() {
 	v1.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor)
 	v1.POST("/monitors/:id/test", monitorHandler.TestMonitor)
 	v1.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
+
+	// Incidents
+	v1.GET("/incidents", incidentHandler.ListIncidents)
+	v1.GET("/incidents/counts", incidentHandler.IncidentCounts)
+	v1.GET("/incidents/:id", incidentHandler.GetIncident)
+	v1.POST("/incidents/:id/acknowledge", incidentHandler.AcknowledgeIncident)
+	v1.POST("/incidents/:id/resolve", incidentHandler.ResolveIncident)
+
+	// Notification channels
+	v1.GET("/notification-channels", notificationHandler.ListChannels)
+	v1.POST("/notification-channels", notificationHandler.CreateChannel)
+	v1.GET("/notification-channels/:id", notificationHandler.GetChannel)
+	v1.PATCH("/notification-channels/:id", notificationHandler.UpdateChannel)
+	v1.DELETE("/notification-channels/:id", notificationHandler.DeleteChannel)
+	v1.POST("/notification-channels/:id/test", notificationHandler.TestChannel)
 
 	// Graceful shutdown
 	go func() {

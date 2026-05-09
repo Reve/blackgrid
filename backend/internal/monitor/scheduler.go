@@ -10,12 +10,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// IncidentHook is invoked after a scheduled monitor check completes so that
+// callers (e.g. the incident service) can react to status transitions.
+type IncidentHook interface {
+	OnScheduledStatusChange(ctx context.Context, monitor db.Monitor, oldStatus, newStatus string)
+}
+
 type Scheduler struct {
 	queries     *db.Queries
 	runner      *Runner
 	workerCount int
 	stopChan    chan struct{}
 	wg          sync.WaitGroup
+	hook        IncidentHook
 }
 
 func NewScheduler(queries *db.Queries, runner *Runner, workerCount int) *Scheduler {
@@ -28,6 +35,10 @@ func NewScheduler(queries *db.Queries, runner *Runner, workerCount int) *Schedul
 		workerCount: workerCount,
 		stopChan:    make(chan struct{}),
 	}
+}
+
+func (s *Scheduler) SetIncidentHook(h IncidentHook) {
+	s.hook = h
 }
 
 func (s *Scheduler) Start() {
@@ -151,7 +162,7 @@ func (s *Scheduler) executeCheck(m db.Monitor) {
 
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 
-	_, err = s.queries.UpdateMonitor(ctx, db.UpdateMonitorParams{
+	updated, err := s.queries.UpdateMonitor(ctx, db.UpdateMonitorParams{
 		ID:                 m.ID,
 		Name:               m.Name,
 		Slug:               m.Slug,
@@ -171,5 +182,12 @@ func (s *Scheduler) executeCheck(m db.Monitor) {
 
 	if err != nil {
 		log.Printf("Monitor %s update state error: %v", m.ID, err)
+		return
+	}
+
+	if s.hook != nil && newStatus != m.Status {
+		hookCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.hook.OnScheduledStatusChange(hookCtx, updated, m.Status, newStatus)
 	}
 }
