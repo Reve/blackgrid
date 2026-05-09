@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { Monitor, MonitorResult } from "../api/client";
 import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor, resumeMonitor, testMonitor, getMonitorResults, rotatePushToken } from '../api/client';
+import { useEvents } from '../context/EventContext';
 
 export default function Monitors() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonitor, setSelectedMonitor] = useState<Monitor | null>(null);
   const [results, setResults] = useState<MonitorResult[]>([]);
+  const { subscribe } = useEvents();
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Partial<Monitor>>({
@@ -23,6 +25,16 @@ export default function Monitors() {
 
   useEffect(() => {
     fetchMonitors();
+    
+    const unsubscribe = subscribe((event) => {
+      if (event.type.startsWith('monitor.')) {
+        fetchMonitors();
+        if (selectedMonitor && event.object_id === selectedMonitor.id) {
+          fetchResults(selectedMonitor.id);
+        }
+      }
+    });
+
     // Handle URL params for pre-filling create form
     const params = new URLSearchParams(window.location.search);
     const type = params.get('type');
@@ -37,7 +49,9 @@ export default function Monitors() {
         });
         setShowForm(true);
     }
-  }, []);
+
+    return () => unsubscribe();
+  }, [selectedMonitor, subscribe]);
 
   const fetchMonitors = async () => {
     try {

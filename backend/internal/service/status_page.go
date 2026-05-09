@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,11 +28,12 @@ var (
 var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 type StatusPageService struct {
-	q *db.Queries
+	q   *db.Queries
+	bus *events.EventBus
 }
 
-func NewStatusPageService(q *db.Queries) *StatusPageService {
-	return &StatusPageService{q: q}
+func NewStatusPageService(q *db.Queries, bus *events.EventBus) *StatusPageService {
+	return &StatusPageService{q: q, bus: bus}
 }
 
 // ----- DTOs -----
@@ -176,6 +178,17 @@ func (s *StatusPageService) CreateStatusPage(ctx context.Context, in StatusPageI
 			return db.StatusPage{}, ErrStatusPageDuplicateSlug
 		}
 		return db.StatusPage{}, err
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(page.ID),
+			Payload: map[string]any{
+				"action": "created",
+				"name":   page.Name,
+				"slug":   page.Slug,
+			},
+		})
 	}
 	return page, nil
 }
@@ -238,6 +251,17 @@ func (s *StatusPageService) UpdateStatusPage(ctx context.Context, id pgtype.UUID
 			return db.StatusPage{}, ErrStatusPageDuplicateSlug
 		}
 		return db.StatusPage{}, err
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"action": "updated",
+				"name":   updated.Name,
+				"slug":   updated.Slug,
+			},
+		})
 	}
 	return updated, nil
 }
@@ -249,7 +273,18 @@ func (s *StatusPageService) DeleteStatusPage(ctx context.Context, id pgtype.UUID
 		}
 		return err
 	}
-	return s.q.DeleteStatusPage(ctx, id)
+	err := s.q.DeleteStatusPage(ctx, id)
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"action": "deleted",
+			},
+		})
+	}
+	return err
 }
 
 func (s *StatusPageService) ListStatusPages(ctx context.Context) ([]db.StatusPage, error) {
@@ -340,6 +375,16 @@ func (s *StatusPageService) AttachMonitor(ctx context.Context, pageID pgtype.UUI
 			return db.StatusPageMonitor{}, ErrMonitorAlreadyAttached
 		}
 		return db.StatusPageMonitor{}, err
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageMonitorChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(pageID),
+			Payload: map[string]any{
+				"action":     "monitor_attached",
+				"monitor_id": events.FormatUUID(in.MonitorID),
+			},
+		})
 	}
 	return link, nil
 }
@@ -367,12 +412,24 @@ func (s *StatusPageService) UpdateAttachedMonitor(ctx context.Context, pageID, m
 		order = *in.DisplayOrder
 	}
 
-	return s.q.UpdateStatusPageMonitor(ctx, db.UpdateStatusPageMonitorParams{
+	res, err := s.q.UpdateStatusPageMonitor(ctx, db.UpdateStatusPageMonitorParams{
 		StatusPageID: pageID,
 		MonitorID:    monitorID,
 		DisplayName:  displayName,
 		DisplayOrder: order,
 	})
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageMonitorChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(pageID),
+			Payload: map[string]any{
+				"action":     "monitor_updated",
+				"monitor_id": events.FormatUUID(monitorID),
+			},
+		})
+	}
+	return res, err
 }
 
 func (s *StatusPageService) RemoveMonitor(ctx context.Context, pageID, monitorID pgtype.UUID) error {
@@ -382,7 +439,19 @@ func (s *StatusPageService) RemoveMonitor(ctx context.Context, pageID, monitorID
 		}
 		return err
 	}
-	return s.q.RemoveStatusPageMonitor(ctx, pageID, monitorID)
+	err := s.q.RemoveStatusPageMonitor(ctx, pageID, monitorID)
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageMonitorChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(pageID),
+			Payload: map[string]any{
+				"action":     "monitor_removed",
+				"monitor_id": events.FormatUUID(monitorID),
+			},
+		})
+	}
+	return err
 }
 
 // ReorderMonitors sets display_order to 10, 20, 30, ... according to the
@@ -417,6 +486,16 @@ func (s *StatusPageService) ReorderMonitors(ctx context.Context, pageID pgtype.U
 		if err != nil {
 			return err
 		}
+	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.StatusPageMonitorChanged,
+			ObjectType: "status_page",
+			ObjectID:   events.FormatUUID(pageID),
+			Payload: map[string]any{
+				"action": "monitors_reordered",
+			},
+		})
 	}
 	return nil
 }

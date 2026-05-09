@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { Incident, IncidentCounts, Monitor, StatusPage } from '../api/client';
 import { getIncidentCounts, getMonitors, listIncidents, listStatusPages } from '../api/client';
+import { useEvents } from '../context/EventContext';
+import { Event } from '../lib/events/types';
 
 export default function Dashboard() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
@@ -9,6 +11,7 @@ export default function Dashboard() {
   const [recentResolved, setRecentResolved] = useState<Incident[]>([]);
   const [statusPages, setStatusPages] = useState<StatusPage[]>([]);
   const [loading, setLoading] = useState(true);
+  const { subscribe, lastEvents } = useEvents();
 
   const load = async () => {
     try {
@@ -33,9 +36,25 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
-  }, []);
+    const t = setInterval(load, 60000); // Polling reduced as we have events
+
+    const unsubscribe = subscribe((event: Event) => {
+      // Reload relevant data on change events
+      if (
+        event.type.includes('monitor') || 
+        event.type.includes('incident') || 
+        event.type.includes('status_page') ||
+        event.type.includes('discovery')
+      ) {
+        load();
+      }
+    });
+
+    return () => {
+      clearInterval(t);
+      unsubscribe();
+    };
+  }, [subscribe]);
 
   if (loading) return <div className="p-4 text-text-muted">Loading dashboard...</div>;
 
@@ -120,23 +139,27 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-        <div className="panel flex flex-col">
+      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
+        <div className="panel flex flex-col col-span-1">
           <h3 className="text-lg text-signal-red mb-4">Active Incident Feed</h3>
           <IncidentTable
             incidents={activeIncidents}
             monitorById={monitorById}
-            emptyMessage="No active incidents. System is stable."
+            emptyMessage="No active incidents."
           />
         </div>
-        <div className="panel flex flex-col">
-          <h3 className="text-lg text-text-muted mb-4">Recent Resolved Incidents</h3>
+        <div className="panel flex flex-col col-span-1">
+          <h3 className="text-lg text-text-muted mb-4">Recent Resolved</h3>
           <IncidentTable
             incidents={recentResolved}
             monitorById={monitorById}
-            emptyMessage="No resolved incidents recorded."
+            emptyMessage="No resolved incidents."
             muted
           />
+        </div>
+        <div className="panel flex flex-col col-span-1">
+          <h3 className="text-lg text-signal-green mb-4">Live Event Feed</h3>
+          <EventFeed events={lastEvents} />
         </div>
       </div>
     </div>
@@ -198,6 +221,35 @@ function IncidentTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+function EventFeed({ events }: { events: Event[] }) {
+  if (events.length === 0) {
+    return <div className="flex-1 flex items-center justify-center text-text-muted text-sm italic">Waiting for events...</div>;
+  }
+  return (
+    <div className="flex-1 overflow-auto">
+      <div className="space-y-2">
+        {events.map((e) => (
+          <div key={e.id} className="text-xs border-l-2 border-surface pl-2 py-1">
+            <div className="flex justify-between text-text-muted mb-1">
+              <span className="uppercase font-bold text-[10px] tracking-tighter">
+                {e.type.replace('.', '_')}
+              </span>
+              <span>{new Date(e.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div className="text-text-main truncate">
+              {e.payload.name || e.payload.summary || e.payload.address || e.payload.action || 'Event trigger'}
+            </div>
+            {e.payload.new_status && (
+              <div className="text-[10px]">
+                STATUS: <span className={e.payload.new_status === 'up' ? 'text-signal-green' : 'text-signal-red'}>{e.payload.new_status.toUpperCase()}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import (
 	"net/netip"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -29,11 +30,12 @@ type AuditParams struct {
 
 // AuditService persists audit log entries.
 type AuditService struct {
-	q *db.Queries
+	q   *db.Queries
+	bus *events.EventBus
 }
 
-func NewAuditService(q *db.Queries) *AuditService {
-	return &AuditService{q: q}
+func NewAuditService(q *db.Queries, bus *events.EventBus) *AuditService {
+	return &AuditService{q: q, bus: bus}
 }
 
 // Log writes an audit entry, logging but not returning errors so it never blocks the caller.
@@ -102,6 +104,18 @@ func (s *AuditService) write(ctx context.Context, p AuditParams) error {
 		BeforeState:     beforeBytes,
 		AfterState:      afterBytes,
 	})
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.AuditEntryCreated,
+			ObjectType: "audit_log",
+			ObjectID:   events.FormatUUID(objectID),
+			Payload: map[string]any{
+				"action":      p.Action,
+				"entity_type": p.EntityType,
+				"actor_type":  p.ActorType,
+			},
+		})
+	}
 	return err
 }
 

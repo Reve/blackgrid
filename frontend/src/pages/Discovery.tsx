@@ -12,6 +12,7 @@ import {
   type DiscoveryScan,
   type Prefix,
 } from '../api/client';
+import { useEvents } from '../context/EventContext';
 
 const CLASSIFICATIONS: DiscoveryClassification[] = ['known', 'new', 'changed', 'duplicate', 'stale', 'ignored'];
 
@@ -48,8 +49,8 @@ export default function Discovery() {
   const [filterClass, setFilterClass] = useState<string>('');
   const [filterIgnored, setFilterIgnored] = useState<'all' | 'yes' | 'no'>('no');
   const [error, setError] = useState<string>('');
-  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const { subscribe } = useEvents();
 
   const refresh = async () => {
     const [prefixesRes, scansRes, resultsRes] = await Promise.all([
@@ -78,10 +79,20 @@ export default function Discovery() {
   useEffect(() => {
     const interval = setInterval(() => {
       refresh().catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 30000); // Polling reduced
+
+    const unsubscribe = subscribe((event) => {
+      if (event.type.startsWith('discovery.')) {
+        refresh();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterPrefix, filterClass, filterIgnored]);
+  }, [filterPrefix, filterClass, filterIgnored, subscribe]);
 
   const prefixById = useMemo(() => {
     const m = new Map<string, Prefix>();

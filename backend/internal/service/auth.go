@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -74,10 +75,11 @@ type AuthService struct {
 	q      *db.Queries
 	config AuthConfig
 	audit  *AuditService
+	bus    *events.EventBus
 }
 
-func NewAuthService(q *db.Queries, cfg AuthConfig, audit *AuditService) *AuthService {
-	return &AuthService{q: q, config: cfg, audit: audit}
+func NewAuthService(q *db.Queries, cfg AuthConfig, audit *AuditService, bus *events.EventBus) *AuthService {
+	return &AuthService{q: q, config: cfg, audit: audit, bus: bus}
 }
 
 // ---- Setup ----
@@ -125,6 +127,17 @@ func (s *AuthService) CreateFirstAdmin(ctx context.Context, email, displayName, 
 			ObjectType: "user",
 			ObjectID:   user.ID,
 			ActorType:  "system",
+		})
+	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.UserChanged,
+			ObjectType: "user",
+			ObjectID:   events.FormatUUID(user.ID),
+			Payload: map[string]any{
+				"action": "created",
+				"email":  user.Email,
+			},
 		})
 	}
 	return user, nil
@@ -340,6 +353,17 @@ func (s *AuthService) CreateUser(ctx context.Context, actor db.User, p CreateUse
 			ActorUserID: actor.ID,
 		})
 	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.UserChanged,
+			ObjectType: "user",
+			ObjectID:   events.FormatUUID(user.ID),
+			Payload: map[string]any{
+				"action": "created",
+				"email":  user.Email,
+			},
+		})
+	}
 	return user, nil
 }
 
@@ -400,6 +424,19 @@ func (s *AuthService) UpdateUser(ctx context.Context, actor db.User, id pgtype.U
 			ActorUserID: actor.ID,
 		})
 	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.UserChanged,
+			ObjectType: "user",
+			ObjectID:   events.FormatUUID(user.ID),
+			Payload: map[string]any{
+				"action":  "updated",
+				"email":   user.Email,
+				"enabled": user.Enabled,
+				"role":    user.Role,
+			},
+		})
+	}
 	return user, nil
 }
 
@@ -425,6 +462,16 @@ func (s *AuthService) DeleteUser(ctx context.Context, actor db.User, id pgtype.U
 			ObjectID:    id,
 			ActorType:   "user",
 			ActorUserID: actor.ID,
+		})
+	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.UserChanged,
+			ObjectType: "user",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"action": "deleted",
+			},
 		})
 	}
 	return nil
@@ -499,6 +546,18 @@ func (s *AuthService) CreateAPIToken(ctx context.Context, actor db.User, p Creat
 			ActorUserID: actor.ID,
 		})
 	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.APITokenChanged,
+			ObjectType: "api_token",
+			ObjectID:   events.FormatUUID(tok.ID),
+			Payload: map[string]any{
+				"action":  "created",
+				"name":    tok.Name,
+				"user_id": events.FormatUUID(tok.UserID),
+			},
+		})
+	}
 	return CreateAPITokenResult{PlaintextToken: plaintext, Token: tok}, nil
 }
 
@@ -533,6 +592,16 @@ func (s *AuthService) DeleteAPIToken(ctx context.Context, actor db.User, id pgty
 			ObjectID:    tok.ID,
 			ActorType:   "user",
 			ActorUserID: actor.ID,
+		})
+	}
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.APITokenChanged,
+			ObjectType: "api_token",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"action": "deleted",
+			},
 		})
 	}
 	return nil

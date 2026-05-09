@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 	"blackgrid/internal/monitor"
 	"blackgrid/internal/service"
 
@@ -18,13 +19,15 @@ type MonitorHandler struct {
 	queries      *db.Queries
 	runner       *monitor.Runner
 	AuditService *service.AuditService
+	bus          *events.EventBus
 }
 
-func NewMonitorHandler(queries *db.Queries, runner *monitor.Runner, audit *service.AuditService) *MonitorHandler {
+func NewMonitorHandler(queries *db.Queries, runner *monitor.Runner, audit *service.AuditService, bus *events.EventBus) *MonitorHandler {
 	return &MonitorHandler{
 		queries:      queries,
 		runner:       runner,
 		AuditService: audit,
+		bus:          bus,
 	}
 }
 
@@ -284,6 +287,19 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	if h.bus != nil {
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorChanged,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(m.ID),
+			Payload: map[string]any{
+				"action": "created",
+				"name":   m.Name,
+				"type":   m.MonitorType,
+			},
+		})
+	}
+
 	resp := createMonitorResponse{
 		monitorResponse:    toMonitorResponse(m),
 		GeneratedPushToken: plainToken,
@@ -381,6 +397,18 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	if h.bus != nil {
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorChanged,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(updated.ID),
+			Payload: map[string]any{
+				"action": "updated",
+				"name":   updated.Name,
+			},
+		})
+	}
+
 	return c.JSON(http.StatusOK, toMonitorResponse(updated))
 }
 
@@ -448,6 +476,17 @@ func (h *MonitorHandler) DeleteMonitor(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	if h.bus != nil {
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorChanged,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(uuid),
+			Payload: map[string]any{
+				"action": "deleted",
+			},
+		})
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -499,6 +538,19 @@ func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) 
 
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	if h.bus != nil && m.Status != status {
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorStatusChanged,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(updated.ID),
+			Payload: map[string]any{
+				"old_status": m.Status,
+				"new_status": status,
+				"name":       updated.Name,
+			},
+		})
 	}
 
 	return c.JSON(http.StatusOK, toMonitorResponse(updated))
@@ -654,6 +706,33 @@ func (h *MonitorHandler) ReceivePushHeartbeat(c echo.Context) error {
 		LastStatusChangeAt: lastStatusChangeAt,
 		PushTokenHash:      m.PushTokenHash,
 	})
+
+	if h.bus != nil {
+		// Publish result created
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorResultCreated,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(m.ID),
+			Payload: map[string]any{
+				"status": pushedStatus,
+				"name":   m.Name,
+			},
+		})
+
+		// Publish status change if needed
+		if newStatus != m.Status {
+			h.bus.Publish(ctx, events.Event{
+				Type:       events.MonitorStatusChanged,
+				ObjectType: "monitor",
+				ObjectID:   events.FormatUUID(m.ID),
+				Payload: map[string]any{
+					"old_status": m.Status,
+					"new_status": newStatus,
+					"name":       m.Name,
+				},
+			})
+		}
+	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }

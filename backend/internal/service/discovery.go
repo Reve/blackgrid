@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -49,12 +50,14 @@ type DiscoveryService struct {
 	tcpTimeoutMs      int
 	pingTimeoutMs     int
 	prober            Prober
+	bus               *events.EventBus
 }
 
-func NewDiscoveryService(q *db.Queries) *DiscoveryService {
+func NewDiscoveryService(q *db.Queries, bus *events.EventBus) *DiscoveryService {
 	tcpTimeout := getEnvAsInt("DISCOVERY_TCP_TIMEOUT_MS", 750)
 	s := &DiscoveryService{
 		q:                 q,
+		bus:               bus,
 		workers:           getEnvAsInt("DISCOVERY_WORKERS", 64),
 		maxIPv4PrefixSize: getEnvAsInt("DISCOVERY_MAX_IPV4_PREFIX_SIZE", 22),
 		tcpTimeoutMs:      tcpTimeout,
@@ -211,6 +214,17 @@ func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) erro
 		return err
 	}
 
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryScanStarted,
+			ObjectType: "discovery_scan",
+			ObjectID:   events.FormatUUID(scan.ID),
+			Payload: map[string]any{
+				"prefix_id": events.FormatUUID(scan.PrefixID),
+			},
+		})
+	}
+
 	ips, err := EnumerateIPv4Hosts(prefix.Prefix)
 	if err != nil {
 		s.failScan(ctx, scanID, err)
@@ -289,6 +303,16 @@ func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) erro
 		Status:      "completed",
 		CompletedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	})
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryScanCompleted,
+			ObjectType: "discovery_scan",
+			ObjectID:   events.FormatUUID(scan.ID),
+			Payload: map[string]any{
+				"prefix_id": events.FormatUUID(scan.PrefixID),
+			},
+		})
+	}
 	return err
 }
 
@@ -355,6 +379,42 @@ func (s *DiscoveryService) persistSeen(ctx context.Context, scanID, prefixID pgt
 		Classification: classification,
 		Raw:            []byte("{}"),
 	})
+
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryResultCreated,
+			ObjectType: "discovery_result",
+			ObjectID:   events.FormatUUID(scanID), // Result ID is not returned by sqlc CreateDiscoveryResult in some schemas, using scanID for grouping or just publishing event
+			Payload: map[string]any{
+				"scan_id":        events.FormatUUID(scanID),
+				"prefix_id":      events.FormatUUID(prefixID),
+				"address":         addr,
+				"classification": classification,
+				"reverse_dns":    probe.ReverseDNS,
+			},
+		})
+
+		if classification == "new" {
+			s.bus.Publish(ctx, events.Event{
+				Type:       events.DiscoveryNewHost,
+				ObjectType: "discovery_result",
+				Payload: map[string]any{
+					"address":   addr,
+					"prefix_id": events.FormatUUID(prefixID),
+				},
+			})
+		} else if classification == "changed" {
+			s.bus.Publish(ctx, events.Event{
+				Type:       events.DiscoveryConflictDetected,
+				ObjectType: "discovery_result",
+				Payload: map[string]any{
+					"address":   addr,
+					"prefix_id": events.FormatUUID(prefixID),
+					"details":   "Open ports changed",
+				},
+			})
+		}
+	}
 	return err
 }
 
@@ -367,6 +427,17 @@ func (s *DiscoveryService) persistStale(ctx context.Context, scanID, prefixID pg
 		Classification: "stale",
 		Raw:            []byte("{}"),
 	})
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryStaleDetected,
+			ObjectType: "discovery_result",
+			Payload: map[string]any{
+				"address":   ip.String(),
+				"prefix_id": events.FormatUUID(prefixID),
+				"scan_id":    events.FormatUUID(scanID),
+			},
+		})
+	}
 	return err
 }
 
@@ -377,6 +448,17 @@ func (s *DiscoveryService) failScan(ctx context.Context, scanID pgtype.UUID, sca
 		CompletedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		Error:       pgtype.Text{String: scanErr.Error(), Valid: true},
 	})
+
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryScanFailed,
+			ObjectType: "discovery_scan",
+			ObjectID:   events.FormatUUID(scanID),
+			Payload: map[string]any{
+				"error": scanErr.Error(),
+			},
+		})
+	}
 }
 
 func uuidString(id pgtype.UUID) string {
@@ -533,11 +615,31 @@ func (s *DiscoveryService) AcceptResult(ctx context.Context, resultID pgtype.UUI
 		return newIP, fmt.Errorf("ip created but failed to link to result: %w", err)
 	}
 
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryResultAccepted,
+			ObjectType: "discovery_result",
+			ObjectID:   events.FormatUUID(res.ID),
+			Payload: map[string]any{
+				"ip_address_id": events.FormatUUID(newIP.ID),
+				"address":       newIP.IpAddress,
+			},
+		})
+	}
+
 	return newIP, nil
 }
 
 func (s *DiscoveryService) IgnoreResult(ctx context.Context, resultID pgtype.UUID) (db.DiscoveryResult, error) {
-	return s.q.UpdateDiscoveryResultIgnored(ctx, resultID)
+	res, err := s.q.UpdateDiscoveryResultIgnored(ctx, resultID)
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.DiscoveryResultIgnored,
+			ObjectType: "discovery_result",
+			ObjectID:   events.FormatUUID(resultID),
+		})
+	}
+	return res, err
 }
 
 // RunScheduledScans loops on a 1-minute ticker. It returns when ctx is done.

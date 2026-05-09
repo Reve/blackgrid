@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -23,9 +24,10 @@ type Scheduler struct {
 	stopChan    chan struct{}
 	wg          sync.WaitGroup
 	hook        IncidentHook
+	bus         *events.EventBus
 }
 
-func NewScheduler(queries *db.Queries, runner *Runner, workerCount int) *Scheduler {
+func NewScheduler(queries *db.Queries, runner *Runner, workerCount int, bus *events.EventBus) *Scheduler {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -33,6 +35,7 @@ func NewScheduler(queries *db.Queries, runner *Runner, workerCount int) *Schedul
 		queries:     queries,
 		runner:      runner,
 		workerCount: workerCount,
+		bus:         bus,
 		stopChan:    make(chan struct{}),
 	}
 }
@@ -184,6 +187,34 @@ func (s *Scheduler) executeCheck(m db.Monitor) {
 	if err != nil {
 		log.Printf("Monitor %s update state error: %v", m.ID, err)
 		return
+	}
+
+	if s.bus != nil {
+		// Always publish result created
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorResultCreated,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(m.ID),
+			Payload: map[string]any{
+				"status":     result.Status,
+				"latency_ms": result.LatencyMs,
+				"name":       m.Name,
+			},
+		})
+
+		// Publish status change if needed
+		if newStatus != m.Status {
+			s.bus.Publish(ctx, events.Event{
+				Type:       events.MonitorStatusChanged,
+				ObjectType: "monitor",
+				ObjectID:   events.FormatUUID(m.ID),
+				Payload: map[string]any{
+					"old_status": m.Status,
+					"new_status": newStatus,
+					"name":       m.Name,
+				},
+			})
+		}
 	}
 
 	if s.hook != nil && newStatus != m.Status {

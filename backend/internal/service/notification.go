@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -57,13 +58,15 @@ type NotificationService struct {
 	q          *db.Queries
 	httpClient *http.Client
 	smtpSender smtpSender // pluggable for tests
+	bus        *events.EventBus
 }
 
 type smtpSender func(addr string, auth smtp.Auth, from string, to []string, msg []byte) error
 
-func NewNotificationService(q *db.Queries) *NotificationService {
+func NewNotificationService(q *db.Queries, bus *events.EventBus) *NotificationService {
 	return &NotificationService{
-		q: q,
+		q:   q,
+		bus: bus,
 		httpClient: &http.Client{
 			Timeout: defaultNotificationTimeout,
 		},
@@ -299,6 +302,25 @@ func (s *NotificationService) deliver(ctx context.Context, channel db.Notificati
 	if err != nil {
 		log.Printf("notification delivery store failed for channel %s: %v", channel.Name, err)
 	}
+
+	if s.bus != nil {
+		eventType := events.NotificationSent
+		if sendErr != nil {
+			eventType = events.NotificationFailed
+		}
+		s.bus.Publish(ctx, events.Event{
+			Type:       eventType,
+			ObjectType: "notification_delivery",
+			ObjectID:   events.FormatUUID(delivery.ID),
+			Payload: map[string]any{
+				"channel_id":   events.FormatUUID(channel.ID),
+				"channel_name": channel.Name,
+				"event":        eventType,
+				"error":        lastErr.String,
+			},
+		})
+	}
+
 	return delivery
 }
 

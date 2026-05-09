@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { EventProvider, useEvents } from './context/EventContext';
 import { useEffect, useState } from 'react';
 import { getSetupStatus } from './api/client';
 
@@ -21,6 +22,7 @@ import SetupPage from './pages/Setup';
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { isConnected } = useEvents();
 
   const navItems = [
     { path: '/', label: 'DASHBOARD' },
@@ -42,7 +44,9 @@ function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-text-muted text-xs bg-surface px-2 py-1 rounded">v0.1.0</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-xs text-signal-green animate-pulse">SYSTEM_ONLINE</div>
+            <div className={`text-xs ${isConnected ? 'text-signal-green' : 'text-signal-red'} ${isConnected ? 'animate-pulse' : ''}`}>
+              {isConnected ? 'SYSTEM_ONLINE' : 'SYSTEM_OFFLINE'}
+            </div>
             {user && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-text-muted">{user.display_name}</span>
@@ -156,7 +160,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <EventProvider>
+          <AppRoutes />
+        </EventProvider>
       </AuthProvider>
     </BrowserRouter>
   );

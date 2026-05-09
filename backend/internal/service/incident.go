@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,10 +28,11 @@ type Notifier interface {
 type IncidentService struct {
 	q        *db.Queries
 	notifier Notifier
+	bus      *events.EventBus
 }
 
-func NewIncidentService(q *db.Queries) *IncidentService {
-	return &IncidentService{q: q}
+func NewIncidentService(q *db.Queries, bus *events.EventBus) *IncidentService {
+	return &IncidentService{q: q, bus: bus}
 }
 
 func (s *IncidentService) SetNotifier(n Notifier) {
@@ -78,6 +80,21 @@ func (s *IncidentService) OpenForMonitor(ctx context.Context, monitor db.Monitor
 		}(incident, monitor)
 	}
 
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.IncidentOpened,
+			ObjectType: "incident",
+			ObjectID:   events.FormatUUID(incident.ID),
+			Payload: map[string]any{
+				"monitor_id":   events.FormatUUID(monitor.ID),
+				"monitor_name": monitor.Name,
+				"severity":     severity,
+				"summary":      summary,
+				"status":        incident.Status,
+			},
+		})
+	}
+
 	return incident, true, nil
 }
 
@@ -108,6 +125,20 @@ func (s *IncidentService) ResolveForMonitor(ctx context.Context, monitor db.Moni
 		}(resolved, monitor)
 	}
 
+	if s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.IncidentResolved,
+			ObjectType: "incident",
+			ObjectID:   events.FormatUUID(resolved.ID),
+			Payload: map[string]any{
+				"monitor_id":   events.FormatUUID(monitor.ID),
+				"monitor_name": monitor.Name,
+				"status":        resolved.Status,
+				"reason":        reason,
+			},
+		})
+	}
+
 	return resolved, true, nil
 }
 
@@ -127,7 +158,19 @@ func (s *IncidentService) Acknowledge(ctx context.Context, id pgtype.UUID, note 
 		return current, nil
 	}
 
-	return s.q.AcknowledgeIncident(ctx, id, note)
+	ack, err := s.q.AcknowledgeIncident(ctx, id, note)
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.IncidentAcknowledged,
+			ObjectType: "incident",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"status": "acknowledged",
+				"note":   note,
+			},
+		})
+	}
+	return ack, err
 }
 
 func (s *IncidentService) Resolve(ctx context.Context, id pgtype.UUID, note string) (db.Incident, error) {
@@ -160,6 +203,25 @@ func (s *IncidentService) Resolve(ctx context.Context, id pgtype.UUID, note stri
 				s.notifier.SendIncidentResolved(context.Background(), inc, m)
 			}(resolved, monitor)
 		}
+	}
+
+	if s.bus != nil {
+		monitorName := ""
+		monitor, mErr := s.q.GetMonitor(ctx, resolved.MonitorID)
+		if mErr == nil {
+			monitorName = monitor.Name
+		}
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.IncidentResolved,
+			ObjectType: "incident",
+			ObjectID:   events.FormatUUID(id),
+			Payload: map[string]any{
+				"monitor_id":   events.FormatUUID(resolved.MonitorID),
+				"monitor_name": monitorName,
+				"status":        "resolved",
+				"note":          note,
+			},
+		})
 	}
 
 	return resolved, nil

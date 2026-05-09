@@ -11,6 +11,7 @@ import (
 
 	"blackgrid/internal/api/handlers"
 	"blackgrid/internal/db"
+	"blackgrid/internal/events"
 	"blackgrid/internal/monitor"
 	"blackgrid/internal/service"
 
@@ -43,18 +44,19 @@ func main() {
 	defer pool.Close()
 
 	queries := db.New(pool)
+	bus := events.NewEventBus()
 
 	// ---- Services ----
-	auditSvc := service.NewAuditService(queries)
+	auditSvc := service.NewAuditService(queries, bus)
 	authCfg := service.AuthConfigFromEnv()
-	authSvc := service.NewAuthService(queries, authCfg, auditSvc)
+	authSvc := service.NewAuthService(queries, authCfg, auditSvc, bus)
 
-	siteSvc := service.NewSiteService(queries)
-	vlanSvc := service.NewVlanService(queries)
-	prefixSvc := service.NewPrefixService(queries)
-	ipSvc := service.NewIPAddressService(queries)
-	deviceSvc := service.NewDeviceService(queries)
-	discoverySvc := service.NewDiscoveryService(queries)
+	siteSvc := service.NewSiteService(queries, bus)
+	vlanSvc := service.NewVlanService(queries, bus)
+	prefixSvc := service.NewPrefixService(queries, bus)
+	ipSvc := service.NewIPAddressService(queries, bus)
+	deviceSvc := service.NewDeviceService(queries, bus)
+	discoverySvc := service.NewDiscoveryService(queries, bus)
 
 	// Start background scheduled scans with a cancelable context for graceful shutdown.
 	schedCtx, cancelScheduler := context.WithCancel(context.Background())
@@ -66,21 +68,23 @@ func main() {
 
 	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc, auditSvc)
 
-	incidentSvc := service.NewIncidentService(queries)
-	notificationSvc := service.NewNotificationService(queries)
+	incidentSvc := service.NewIncidentService(queries, bus)
+	notificationSvc := service.NewNotificationService(queries, bus)
 	incidentSvc.SetNotifier(notificationSvc)
 
 	monitorRunner := monitor.NewRunner(queries)
-	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10)
+	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10, bus)
 	monitorScheduler.SetIncidentHook(service.NewIncidentHook(incidentSvc))
 	monitorScheduler.Start()
 
-	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner, auditSvc)
+	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner, auditSvc, bus)
 	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
 	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
 
-	statusPageSvc := service.NewStatusPageService(queries)
+	statusPageSvc := service.NewStatusPageService(queries, bus)
 	statusPageHandler := handlers.NewStatusPageHandler(statusPageSvc)
+
+	eventHandler := handlers.NewEventHandler(bus)
 
 	authHandler := handlers.NewAuthHandler(authSvc, auditSvc, authCfg)
 
@@ -111,6 +115,9 @@ func main() {
 
 	// Current user
 	api.GET("/auth/me", authHandler.Me)
+
+	// Events stream
+	api.GET("/events/stream", eventHandler.StreamEvents)
 
 	// Sites — viewer can GET, operator+ can mutate
 	api.GET("/sites", h.GetSites)
