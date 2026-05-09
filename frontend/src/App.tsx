@@ -5,6 +5,7 @@ import IPAM from './pages/IPAM';
 import Devices from './pages/Devices';
 import Monitors from './pages/Monitors';
 import Incidents from './pages/Incidents';
+import Discovery from './pages/Discovery';
 import Settings from './pages/Settings';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { path: '/devices', label: 'DEVICES' },
     { path: '/monitors', label: 'MONITORS' },
     { path: '/incidents', label: 'INCIDENTS' },
+    { path: '/discovery', label: 'DISCOVERY' },
     { path: '/settings', label: 'SETTINGS' },
   ];
 
@@ -68,6 +70,7 @@ function App() {
           <Route path="/devices" element={<Devices />} />
           <Route path="/monitors" element={<Monitors />} />
           <Route path="/incidents" element={<Incidents />} />
+          <Route path="/discovery" element={<Discovery />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>

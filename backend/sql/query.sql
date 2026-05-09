@@ -64,6 +64,18 @@ DELETE FROM ip_addresses WHERE id = $1;
 -- name: GetIPAddressesByPrefix :many
 SELECT * FROM ip_addresses WHERE prefix_id = $1 ORDER BY ip_address;
 
+-- name: UpdateIPAddressLastSeen :one
+UPDATE ip_addresses SET last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
+
+-- name: UpdateIPAddressStatus :one
+UPDATE ip_addresses SET status = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
+
+-- name: UpdatePrefixScanConfig :one
+UPDATE prefixes SET scan_enabled = $2, scan_interval_seconds = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *;
+
+-- name: GetLatestScanForPrefix :one
+SELECT * FROM discovery_scans WHERE prefix_id = $1 ORDER BY created_at DESC LIMIT 1;
+
 
 -- name: GetDevices :many
 SELECT * FROM devices ORDER BY name;

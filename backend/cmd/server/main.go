@@ -13,6 +13,7 @@ import (
 	"blackgrid/internal/db"
 	"blackgrid/internal/monitor"
 	"blackgrid/internal/service"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -43,8 +44,17 @@ func main() {
 	prefixSvc := service.NewPrefixService(queries)
 	ipSvc := service.NewIPAddressService(queries)
 	deviceSvc := service.NewDeviceService(queries)
+	discoverySvc := service.NewDiscoveryService(queries)
 
-	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc)
+	// Start background scheduled scans with a cancelable context for graceful shutdown.
+	schedCtx, cancelScheduler := context.WithCancel(context.Background())
+	schedDone := make(chan struct{})
+	go func() {
+		defer close(schedDone)
+		discoverySvc.RunScheduledScans(schedCtx)
+	}()
+
+	h := handlers.New(siteSvc, vlanSvc, prefixSvc, ipSvc, deviceSvc, discoverySvc)
 
 	monitorRunner := monitor.NewRunner(queries)
 	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10)
@@ -76,6 +86,7 @@ func main() {
 	v1.GET("/prefixes/:id/next-ip", h.GetNextAvailableIP)
 	v1.POST("/prefixes", h.CreatePrefix)
 	v1.PUT("/prefixes/:id", h.UpdatePrefix)
+	v1.PUT("/prefixes/:id/scan-config", h.UpdatePrefixScanConfig)
 	v1.DELETE("/prefixes/:id", h.DeletePrefix)
 
 	// IP Addresses
@@ -91,6 +102,15 @@ func main() {
 	v1.POST("/devices", h.CreateDevice)
 	v1.PUT("/devices/:id", h.UpdateDevice)
 	v1.DELETE("/devices/:id", h.DeleteDevice)
+
+	// Discovery
+	v1.GET("/discovery/scans", h.GetScans)
+	v1.POST("/discovery/scans", h.StartScan)
+	v1.GET("/discovery/scans/:id", h.GetScan)
+	v1.GET("/discovery/results", h.GetDiscoveryResults)
+	v1.POST("/discovery/results/:id/accept", h.AcceptDiscoveryResult)
+	v1.POST("/discovery/results/:id/ignore", h.IgnoreDiscoveryResult)
+	v1.POST("/prefixes/:id/scan", h.StartPrefixScan)
 
 	// Monitors
 	v1.GET("/monitors", monitorHandler.GetMonitors)
@@ -115,6 +135,13 @@ func main() {
 	<-quit
 
 	monitorScheduler.Stop()
+
+	cancelScheduler()
+	select {
+	case <-schedDone:
+	case <-time.After(5 * time.Second):
+		log.Println("discovery scheduler did not stop within 5s")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

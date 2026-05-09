@@ -1,10 +1,11 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "sql/query.sql"
-    schema: "migrations/001_schema.sql"
+    queries: ["sql/query.sql", "sql/discovery.sql"]
+    schema: "migrations"
     gen:
       go:
         package: "db"
         out: "internal/db"
         sql_package: "pgx/v5"
+        emit_json_tags: true

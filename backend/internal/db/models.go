@@ -5,73 +5,90 @@
 package db
 
 import (
+	"net"
+	"net/netip"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AuditLog struct {
-	ID         pgtype.UUID
-	Action     string
-	EntityType string
-	EntityID   pgtype.UUID
-	Changes    []byte
-	CreatedAt  pgtype.Timestamptz
+	ID         pgtype.UUID        `json:"id"`
+	Action     string             `json:"action"`
+	EntityType string             `json:"entity_type"`
+	EntityID   pgtype.UUID        `json:"entity_id"`
+	Changes    []byte             `json:"changes"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type Device struct {
-	ID          pgtype.UUID
-	Name        string
-	SiteID      pgtype.UUID
-	Description pgtype.Text
-	Status      pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	SiteID      pgtype.UUID        `json:"site_id"`
+	Description pgtype.Text        `json:"description"`
+	Status      pgtype.Text        `json:"status"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type DiscoveryResult struct {
-	ID           pgtype.UUID
-	ScanID       pgtype.UUID
-	IpAddress    string
-	MacAddress   pgtype.Text
-	Hostname     pgtype.Text
-	IsActive     pgtype.Bool
-	DiscoveredAt pgtype.Timestamptz
+	ID                 pgtype.UUID        `json:"id"`
+	ScanID             pgtype.UUID        `json:"scan_id"`
+	PrefixID           pgtype.UUID        `json:"prefix_id"`
+	Address            netip.Addr         `json:"address"`
+	MacAddress         net.HardwareAddr   `json:"mac_address"`
+	Hostname           pgtype.Text        `json:"hostname"`
+	ReverseDns         pgtype.Text        `json:"reverse_dns"`
+	OpenPorts          []byte             `json:"open_ports"`
+	LatencyMs          pgtype.Int4        `json:"latency_ms"`
+	Classification     string             `json:"classification"`
+	SeenAt             pgtype.Timestamptz `json:"seen_at"`
+	Raw                []byte             `json:"raw"`
+	Ignored            bool               `json:"ignored"`
+	AcceptedAt         pgtype.Timestamptz `json:"accepted_at"`
+	CreatedIpAddressID pgtype.UUID        `json:"created_ip_address_id"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 }
 
 type DiscoveryScan struct {
-	ID         pgtype.UUID
-	PrefixID   pgtype.UUID
-	Status     string
-	StartedAt  pgtype.Timestamptz
-	FinishedAt pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	PrefixID    pgtype.UUID        `json:"prefix_id"`
+	Status      string             `json:"status"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+	Error       pgtype.Text        `json:"error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Incident struct {
-	ID          pgtype.UUID
-	MonitorID   pgtype.UUID
-	Status      string
-	StartedAt   pgtype.Timestamptz
-	ResolvedAt  pgtype.Timestamptz
-	Description pgtype.Text
+	ID          pgtype.UUID        `json:"id"`
+	MonitorID   pgtype.UUID        `json:"monitor_id"`
+	Status      string             `json:"status"`
+	StartedAt   pgtype.Timestamptz `json:"started_at"`
+	ResolvedAt  pgtype.Timestamptz `json:"resolved_at"`
+	Description pgtype.Text        `json:"description"`
 }
 
 type Interface struct {
-	ID         pgtype.UUID
-	DeviceID   pgtype.UUID
-	Name       string
-	MacAddress pgtype.Text
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID         pgtype.UUID        `json:"id"`
+	DeviceID   pgtype.UUID        `json:"device_id"`
+	Name       string             `json:"name"`
+	MacAddress pgtype.Text        `json:"mac_address"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type IpAddress struct {
-	ID          pgtype.UUID
-	PrefixID    pgtype.UUID
-	IpAddress   string
-	InterfaceID pgtype.UUID
-	Status      pgtype.Text
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	PrefixID    pgtype.UUID        `json:"prefix_id"`
+	IpAddress   string             `json:"ip_address"`
+	InterfaceID pgtype.UUID        `json:"interface_id"`
+	Status      pgtype.Text        `json:"status"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	LastSeenAt  pgtype.Timestamptz `json:"last_seen_at"`
 }
 
 type Monitor struct {
@@ -95,38 +112,40 @@ type Monitor struct {
 }
 
 type MonitorResult struct {
-	ID           pgtype.UUID
-	MonitorID    pgtype.UUID
-	Status       string
-	LatencyMs    pgtype.Int4
-	ErrorMessage pgtype.Text
-	CheckedAt    pgtype.Timestamptz
+	ID           pgtype.UUID        `json:"id"`
+	MonitorID    pgtype.UUID        `json:"monitor_id"`
+	Status       string             `json:"status"`
+	LatencyMs    pgtype.Int4        `json:"latency_ms"`
+	ErrorMessage pgtype.Text        `json:"error_message"`
+	CheckedAt    pgtype.Timestamptz `json:"checked_at"`
 }
 
 type Prefix struct {
-	ID          pgtype.UUID
-	SiteID      pgtype.UUID
-	VlanID      pgtype.UUID
-	Prefix      string
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID                  pgtype.UUID        `json:"id"`
+	SiteID              pgtype.UUID        `json:"site_id"`
+	VlanID              pgtype.UUID        `json:"vlan_id"`
+	Prefix              string             `json:"prefix"`
+	Description         pgtype.Text        `json:"description"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ScanEnabled         bool               `json:"scan_enabled"`
+	ScanIntervalSeconds int32              `json:"scan_interval_seconds"`
 }
 
 type Site struct {
-	ID          pgtype.UUID
-	Name        string
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Vlan struct {
-	ID          pgtype.UUID
-	SiteID      pgtype.UUID
-	VlanID      int32
-	Name        string
-	Description pgtype.Text
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID          pgtype.UUID        `json:"id"`
+	SiteID      pgtype.UUID        `json:"site_id"`
+	VlanID      int32              `json:"vlan_id"`
+	Name        string             `json:"name"`
+	Description pgtype.Text        `json:"description"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }

@@ -73,6 +73,29 @@ func (h *Handlers) DeletePrefix(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+type scanConfigReq struct {
+	ScanEnabled         bool  `json:"scan_enabled"`
+	ScanIntervalSeconds int32 `json:"scan_interval_seconds"`
+}
+
+func (h *Handlers) UpdatePrefixScanConfig(c echo.Context) error {
+	var id pgtype.UUID
+	if err := id.Scan(c.Param("id")); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+
+	var req scanConfigReq
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	prefix, err := h.PrefixService.UpdateScanConfig(c.Request().Context(), id, req.ScanEnabled, req.ScanIntervalSeconds)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return c.JSON(http.StatusOK, prefix)
+}
+
 func (h *Handlers) GetNextAvailableIP(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
