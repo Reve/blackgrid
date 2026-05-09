@@ -85,7 +85,7 @@ type CreateAuditLogParams struct {
 	ActorType       pgtype.Text `json:"actor_type"`
 	ActorApiTokenID pgtype.UUID `json:"actor_api_token_id"`
 	RequestID       pgtype.Text `json:"request_id"`
-	Column9         netip.Addr  `json:"column_9"`
+	IpAddress       netip.Addr  `json:"ip_address"`
 	ObjectType      pgtype.Text `json:"object_type"`
 	ObjectID        pgtype.UUID `json:"object_id"`
 	BeforeState     []byte      `json:"before_state"`
@@ -120,7 +120,7 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 		arg.ActorType,
 		arg.ActorApiTokenID,
 		arg.RequestID,
-		arg.Column9,
+		arg.IpAddress,
 		arg.ObjectType,
 		arg.ObjectID,
 		arg.BeforeState,
@@ -398,10 +398,10 @@ LIMIT $5 OFFSET $6
 `
 
 type ListAuditLogsParams struct {
-	Column1 pgtype.UUID `json:"column_1"`
-	Column2 string      `json:"column_2"`
-	Column3 string      `json:"column_3"`
-	Column4 pgtype.UUID `json:"column_4"`
+	ActorUserID pgtype.UUID `json:"actor_user_id"`
+	Action      pgtype.Text `json:"action"`
+	ObjectType  pgtype.Text `json:"object_type"`
+	ObjectID    pgtype.UUID `json:"object_id"`
 	Limit   int32       `json:"limit"`
 	Offset  int32       `json:"offset"`
 }
@@ -426,10 +426,10 @@ type ListAuditLogsRow struct {
 
 func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]ListAuditLogsRow, error) {
 	rows, err := q.db.Query(ctx, listAuditLogs,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
+		arg.ActorUserID,
+		arg.Action,
+		arg.ObjectType,
+		arg.ObjectID,
 		arg.Limit,
 		arg.Offset,
 	)

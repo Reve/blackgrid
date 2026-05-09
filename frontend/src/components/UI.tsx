@@ -1,5 +1,5 @@
 import React from 'react';
-import { ApiErrorDetail } from '../api/client';
+import type { ApiErrorDetail } from '../api/client';
 
 export const Loading = ({ message = 'Loading...' }: { message?: string }) => (
   <div className="flex-1 flex items-center justify-center p-8 text-text-muted animate-pulse">

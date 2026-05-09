@@ -196,7 +196,6 @@ func (s *DiscoveryService) StartManualScan(ctx context.Context, prefixID pgtype.
 
 // RunScan executes a queued scan synchronously.
 func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) error {
-	start := time.Now()
 	scan, err := s.q.GetDiscoveryScan(ctx, scanID)
 	if err != nil {
 		return err

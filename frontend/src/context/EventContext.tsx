@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { EventStreamClient } from '../lib/events/client';
-import { Event, EventType } from '../lib/events/types';
+import type { Event, EventType } from '../lib/events/types';
 import { useAuth } from './AuthContext';
 
 interface EventContextType {

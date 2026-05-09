@@ -10,28 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// StatusPage represents a row from status_pages.
-type StatusPage struct {
-	ID            pgtype.UUID        `json:"id"`
-	Name          string             `json:"name"`
-	Slug          string             `json:"slug"`
-	Description   pgtype.Text        `json:"description"`
-	Public        bool               `json:"public"`
-	ShowUptime    bool               `json:"show_uptime"`
-	ShowIncidents bool               `json:"show_incidents"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
-}
-
-// StatusPageMonitor represents a row from status_page_monitors.
-type StatusPageMonitor struct {
-	StatusPageID pgtype.UUID        `json:"status_page_id"`
-	MonitorID    pgtype.UUID        `json:"monitor_id"`
-	DisplayName  pgtype.Text        `json:"display_name"`
-	DisplayOrder int32              `json:"display_order"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-}
-
 const statusPageColumns = `id, name, slug, description, public, show_uptime, show_incidents, created_at, updated_at`
 
 func scanStatusPage(row pgx.Row, p *StatusPage) error {

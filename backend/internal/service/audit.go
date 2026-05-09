@@ -89,6 +89,11 @@ func (s *AuditService) write(ctx context.Context, p AuditParams) error {
 		entityID = p.ObjectID
 	}
 
+	var ipAddr netip.Addr
+	if p.IPAddress != nil {
+		ipAddr = *p.IPAddress
+	}
+
 	_, err := s.q.CreateAuditLog(ctx, db.CreateAuditLogParams{
 		Action:          p.Action,
 		EntityType:      p.EntityType,
@@ -96,9 +101,9 @@ func (s *AuditService) write(ctx context.Context, p AuditParams) error {
 		Changes:         nil,
 		ActorUserID:     p.ActorUserID,
 		ActorType:       actorType,
-		ActorAPITokenID: p.ActorTokenID,
+		ActorApiTokenID: p.ActorTokenID,
 		RequestID:       requestID,
-		IPAddress:       p.IPAddress,
+		IpAddress:       ipAddr,
 		ObjectType:      objectType,
 		ObjectID:        objectID,
 		BeforeState:     beforeBytes,
@@ -120,7 +125,7 @@ func (s *AuditService) write(ctx context.Context, p AuditParams) error {
 }
 
 // ListAuditLogs returns audit log entries with optional filters.
-func (s *AuditService) List(ctx context.Context, p db.ListAuditLogsParams) ([]db.AuditLogEntry, error) {
+func (s *AuditService) List(ctx context.Context, p db.ListAuditLogsParams) ([]db.ListAuditLogsRow, error) {
 	if p.Limit <= 0 {
 		p.Limit = 100
 	}
@@ -129,7 +134,7 @@ func (s *AuditService) List(ctx context.Context, p db.ListAuditLogsParams) ([]db
 		return nil, err
 	}
 	if items == nil {
-		items = []db.AuditLogEntry{}
+		items = []db.ListAuditLogsRow{}
 	}
 	return items, nil
 }

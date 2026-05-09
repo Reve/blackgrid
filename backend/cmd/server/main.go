@@ -53,11 +53,17 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	// 4. Database Pool Configuration
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		dbURL = "postgres://blackgrid:blackgrid@localhost:5432/blackgrid?sslmode=disable"
 	}
+
+	// 4. Run Migrations
+	if err := db.RunMigrations(context.Background(), dbURL); err != nil {
+		log.Fatalf("Failed to run migrations: %v\n", err)
+	}
+
+	// 5. Database Pool Configuration
 
 	config, err := pgxpool.ParseConfig(dbURL)
 	if err != nil {

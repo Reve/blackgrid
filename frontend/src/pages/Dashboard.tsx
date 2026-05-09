@@ -1,10 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import type { Incident, IncidentCounts, Monitor, StatusPage } from '../api/client';
 import { getIncidentCounts, getMonitors, listIncidents, listStatusPages } from '../api/client';
 import { useEvents } from '../context/EventContext';
-import { Event } from '../lib/events/types';
+import type { Event } from '../lib/events/types';
 import { Loading, ErrorState } from '../components/UI';
-import { ApiErrorDetail } from '../api/client';
+import type { ApiErrorDetail } from '../api/client';
 
 export default function Dashboard() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);

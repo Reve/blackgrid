@@ -408,7 +408,10 @@ func (s *AuthService) UpdateUser(ctx context.Context, actor db.User, id pgtype.U
 		if err != nil {
 			return db.User{}, err
 		}
-		user, err = s.q.UpdateUserPassword(ctx, id, string(pwHash))
+		user, err = s.q.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+			ID:           id,
+			PasswordHash: string(pwHash),
+		})
 		if err != nil {
 			return db.User{}, err
 		}

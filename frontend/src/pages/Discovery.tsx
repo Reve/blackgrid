@@ -49,6 +49,7 @@ export default function Discovery() {
   const [filterClass, setFilterClass] = useState<string>('');
   const [filterIgnored, setFilterIgnored] = useState<'all' | 'yes' | 'no'>('no');
   const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const { subscribe } = useEvents();
 

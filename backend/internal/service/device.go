@@ -35,7 +35,7 @@ func (s *DeviceService) CreateDevice(ctx context.Context, req db.CreateDevicePar
 			ObjectID:   events.FormatUUID(device.ID),
 			Payload: map[string]any{
 				"action": "created",
-				"name":   device.Hostname,
+				"name":   device.Name,
 			},
 		})
 	}
@@ -51,7 +51,7 @@ func (s *DeviceService) UpdateDevice(ctx context.Context, req db.UpdateDevicePar
 			ObjectID:   events.FormatUUID(device.ID),
 			Payload: map[string]any{
 				"action": "updated",
-				"name":   device.Hostname,
+				"name":   device.Name,
 			},
 		})
 	}

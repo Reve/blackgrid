@@ -6,9 +6,9 @@ import {
   startPrefixScan,
   listDiscoveryScans,
   updatePrefixScanConfig,
-  ApiErrorDetail,
+  type ApiErrorDetail,
 } from '../api/client';
-import { Loading, ErrorState, EmptyState } from '../components/UI';
+import { Loading, ErrorState } from '../components/UI';
 import { useToast } from '../context/ToastContext';
 
 export default function IPAM() {
@@ -20,6 +20,7 @@ export default function IPAM() {
   const [error, setError] = useState<ApiErrorDetail | null>(null);
   const { success, error: toastError } = useToast();
 
+  const loadAll = async () => {
     try {
       const [prefixesRes, ipsRes, scansRes] = await Promise.all([
         getPrefixes(),
@@ -57,7 +58,7 @@ export default function IPAM() {
   };
 
   const handleToggleScanEnabled = async (p: Prefix) => {
-    setError('');
+    setError(null);
     try {
       await updatePrefixScanConfig(p.id, {
         scan_enabled: !p.scan_enabled,
@@ -91,7 +92,6 @@ export default function IPAM() {
 
   return (
     <div className="space-y-6">
-      {error && <div className="panel border border-signal-red text-signal-red text-sm">{error}</div>}
       <div className="panel">
         <h2 className="text-xl text-signal-green mb-4">Prefixes</h2>
         <div className="overflow-x-auto">

@@ -51,8 +51,7 @@ func (s *RetentionService) Run(ctx context.Context, cfg RetentionConfig) {
 	log.Println("Starting data retention cleanup job...")
 
 	if cfg.MonitorResultsDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -cfg.MonitorResultsDays)
-		count, err := s.q.DeleteOldMonitorResults(ctx, cutoff)
+		count, err := s.q.CleanupMonitorResults(ctx, int32(cfg.MonitorResultsDays))
 		if err != nil {
 			log.Printf("Failed to cleanup monitor_results: %v", err)
 		} else {
@@ -61,8 +60,7 @@ func (s *RetentionService) Run(ctx context.Context, cfg RetentionConfig) {
 	}
 
 	if cfg.NotificationDeliveriesDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -cfg.NotificationDeliveriesDays)
-		count, err := s.q.DeleteOldNotificationDeliveries(ctx, cutoff)
+		count, err := s.q.CleanupNotificationDeliveries(ctx, int32(cfg.NotificationDeliveriesDays))
 		if err != nil {
 			log.Printf("Failed to cleanup notification_deliveries: %v", err)
 		} else {
@@ -71,8 +69,7 @@ func (s *RetentionService) Run(ctx context.Context, cfg RetentionConfig) {
 	}
 
 	if cfg.AuditLogDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -cfg.AuditLogDays)
-		count, err := s.q.DeleteOldAuditLogs(ctx, cutoff)
+		count, err := s.q.CleanupAuditLogs(ctx, int32(cfg.AuditLogDays))
 		if err != nil {
 			log.Printf("Failed to cleanup audit_log: %v", err)
 		} else {
@@ -81,8 +78,7 @@ func (s *RetentionService) Run(ctx context.Context, cfg RetentionConfig) {
 	}
 
 	if cfg.DiscoveryResultsDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -cfg.DiscoveryResultsDays)
-		count, err := s.q.DeleteOldDiscoveryResults(ctx, cutoff)
+		count, err := s.q.CleanupDiscoveryResults(ctx, int32(cfg.DiscoveryResultsDays))
 		if err != nil {
 			log.Printf("Failed to cleanup discovery_results: %v", err)
 		} else {
@@ -91,8 +87,7 @@ func (s *RetentionService) Run(ctx context.Context, cfg RetentionConfig) {
 	}
 
 	if cfg.DiscoveryScansDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -cfg.DiscoveryScansDays)
-		count, err := s.q.DeleteOldDiscoveryScans(ctx, cutoff)
+		count, err := s.q.CleanupDiscoveryScans(ctx, int32(cfg.DiscoveryScansDays))
 		if err != nil {
 			log.Printf("Failed to cleanup discovery_scans: %v", err)
 		} else {

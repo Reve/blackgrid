@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Monitor, MonitorResult } from "../api/client";
-import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor, resumeMonitor, testMonitor, getMonitorResults, rotatePushToken, ApiErrorDetail } from '../api/client';
+import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor, resumeMonitor, testMonitor, getMonitorResults, rotatePushToken, type ApiErrorDetail } from '../api/client';
 import { useEvents } from '../context/EventContext';
-import { Loading, ErrorState, EmptyState, ConfirmDialog } from '../components/UI';
+import { Loading, ErrorState, ConfirmDialog } from '../components/UI';
 import { useToast } from '../context/ToastContext';
 
 export default function Monitors() {
@@ -492,7 +492,6 @@ export default function Monitors() {
             </table>
           </div>
         </div>
-      )}
       )}
 
       <ConfirmDialog

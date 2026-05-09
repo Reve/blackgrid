@@ -178,6 +178,7 @@ func (s *StatusPageService) CreateStatusPage(ctx context.Context, in StatusPageI
 			return db.StatusPage{}, ErrStatusPageDuplicateSlug
 		}
 		return db.StatusPage{}, err
+	}
 	if err == nil && s.bus != nil {
 		s.bus.Publish(ctx, events.Event{
 			Type:       events.StatusPageChanged,
@@ -251,6 +252,7 @@ func (s *StatusPageService) UpdateStatusPage(ctx context.Context, id pgtype.UUID
 			return db.StatusPage{}, ErrStatusPageDuplicateSlug
 		}
 		return db.StatusPage{}, err
+	}
 	if err == nil && s.bus != nil {
 		s.bus.Publish(ctx, events.Event{
 			Type:       events.StatusPageChanged,
@@ -375,6 +377,7 @@ func (s *StatusPageService) AttachMonitor(ctx context.Context, pageID pgtype.UUI
 			return db.StatusPageMonitor{}, ErrMonitorAlreadyAttached
 		}
 		return db.StatusPageMonitor{}, err
+	}
 	if err == nil && s.bus != nil {
 		s.bus.Publish(ctx, events.Event{
 			Type:       events.StatusPageMonitorChanged,

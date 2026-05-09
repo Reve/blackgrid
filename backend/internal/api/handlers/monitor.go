@@ -289,7 +289,7 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
-			Type:       events.MonitorChanged,
+			Type:       events.MonitorCreated,
 			ObjectType: "monitor",
 			ObjectID:   events.FormatUUID(m.ID),
 			Payload: map[string]any{
@@ -399,7 +399,7 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
-			Type:       events.MonitorChanged,
+			Type:       events.MonitorUpdated,
 			ObjectType: "monitor",
 			ObjectID:   events.FormatUUID(updated.ID),
 			Payload: map[string]any{
@@ -478,7 +478,7 @@ func (h *MonitorHandler) DeleteMonitor(c echo.Context) error {
 
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
-			Type:       events.MonitorChanged,
+			Type:       events.MonitorDeleted,
 			ObjectType: "monitor",
 			ObjectID:   events.FormatUUID(uuid),
 			Payload: map[string]any{
@@ -635,7 +635,7 @@ func (h *MonitorHandler) ReceivePushHeartbeat(c echo.Context) error {
 	}
 
 	hash := monitor.HashToken(rawToken)
-	m, err := h.queries.GetMonitorByPushTokenHash(ctx, hash)
+	m, err := h.queries.GetMonitorByPushTokenHash(ctx, pgtype.Text{String: hash, Valid: true})
 	if err != nil {
 		// Return generic 404 to not reveal token existence
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})

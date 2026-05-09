@@ -35,7 +35,7 @@ func (s *VlanService) CreateVlan(ctx context.Context, req db.CreateVlanParams) (
 			ObjectID:   events.FormatUUID(vlan.ID),
 			Payload: map[string]any{
 				"action": "created",
-				"vid":    vlan.Vid,
+				"vid":    vlan.VlanID,
 				"name":   vlan.Name,
 			},
 		})
@@ -52,7 +52,7 @@ func (s *VlanService) UpdateVlan(ctx context.Context, req db.UpdateVlanParams) (
 			ObjectID:   events.FormatUUID(vlan.ID),
 			Payload: map[string]any{
 				"action": "updated",
-				"vid":    vlan.Vid,
+				"vid":    vlan.VlanID,
 				"name":   vlan.Name,
 			},
 		})

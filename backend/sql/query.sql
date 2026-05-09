@@ -99,12 +99,12 @@ SELECT * FROM monitors ORDER BY name;
 SELECT * FROM monitors WHERE id = $1 LIMIT 1;
 
 -- name: CreateMonitor :one
-INSERT INTO monitors (name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *;
+INSERT INTO monitors (name, slug, monitor_type, target, config, ip_address_id, device_id, interval_seconds, timeout_seconds, retry_count, enabled, status, push_token_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *;
 
 -- name: UpdateMonitor :one
 UPDATE monitors
-SET name = $2, slug = $3, monitor_type = $4, target = $5, config = $6, ip_address_id = $7, device_id = $8, interval_seconds = $9, timeout_seconds = $10, retry_count = $11, enabled = $12, status = $13, last_checked_at = $14, last_status_change_at = $15, updated_at = CURRENT_TIMESTAMP
+SET name = $2, slug = $3, monitor_type = $4, target = $5, config = $6, ip_address_id = $7, device_id = $8, interval_seconds = $9, timeout_seconds = $10, retry_count = $11, enabled = $12, status = $13, last_checked_at = $14, last_status_change_at = $15, push_token_hash = $16, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 RETURNING *;
 
 -- name: DeleteMonitor :exec
@@ -121,5 +121,5 @@ ORDER BY last_checked_at ASC NULLS FIRST;
 SELECT * FROM monitor_results WHERE monitor_id = $1 ORDER BY checked_at DESC LIMIT $2 OFFSET $3;
 
 -- name: CreateMonitorResult :one
-INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message)
-VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message, details)
+VALUES ($1, $2, $3, $4, $5) RETURNING *;

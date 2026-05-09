@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api/v1',
+  baseURL: '/api/v1',
   withCredentials: true,
 });
 
@@ -328,7 +328,7 @@ export const reorderStatusPageMonitors = (id: string, monitorIds: string[]) =>
   api.post(`/status-pages/${id}/monitors/reorder`, { monitor_ids: monitorIds });
 
 // Public status page is at the root, not under /api/v1.
-const publicAxios = axios.create({ baseURL: 'http://localhost:8080' });
+const publicAxios = axios.create({ baseURL: '' });
 
 publicAxios.interceptors.response.use(
   (response) => response,

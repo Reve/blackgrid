@@ -14,9 +14,12 @@ DELETE FROM audit_log
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
 
-func (q *Queries) CleanupAuditLogs(ctx context.Context, dollar_1 int32) error {
-	_, err := q.db.Exec(ctx, cleanupAuditLogs, dollar_1)
-	return err
+func (q *Queries) CleanupAuditLogs(ctx context.Context, dollar_1 int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupAuditLogs, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const cleanupDiscoveryResults = `-- name: CleanupDiscoveryResults :exec
@@ -24,9 +27,12 @@ DELETE FROM discovery_results
 WHERE seen_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
 
-func (q *Queries) CleanupDiscoveryResults(ctx context.Context, dollar_1 int32) error {
-	_, err := q.db.Exec(ctx, cleanupDiscoveryResults, dollar_1)
-	return err
+func (q *Queries) CleanupDiscoveryResults(ctx context.Context, dollar_1 int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupDiscoveryResults, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const cleanupDiscoveryScans = `-- name: CleanupDiscoveryScans :exec
@@ -34,9 +40,12 @@ DELETE FROM discovery_scans
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
 
-func (q *Queries) CleanupDiscoveryScans(ctx context.Context, dollar_1 int32) error {
-	_, err := q.db.Exec(ctx, cleanupDiscoveryScans, dollar_1)
-	return err
+func (q *Queries) CleanupDiscoveryScans(ctx context.Context, dollar_1 int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupDiscoveryScans, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const cleanupMonitorResults = `-- name: CleanupMonitorResults :exec
@@ -44,9 +53,12 @@ DELETE FROM monitor_results
 WHERE checked_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
 
-func (q *Queries) CleanupMonitorResults(ctx context.Context, dollar_1 int32) error {
-	_, err := q.db.Exec(ctx, cleanupMonitorResults, dollar_1)
-	return err
+func (q *Queries) CleanupMonitorResults(ctx context.Context, dollar_1 int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupMonitorResults, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const cleanupNotificationDeliveries = `-- name: CleanupNotificationDeliveries :exec
@@ -54,7 +66,10 @@ DELETE FROM notification_deliveries
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
 
-func (q *Queries) CleanupNotificationDeliveries(ctx context.Context, dollar_1 int32) error {
-	_, err := q.db.Exec(ctx, cleanupNotificationDeliveries, dollar_1)
-	return err
+func (q *Queries) CleanupNotificationDeliveries(ctx context.Context, dollar_1 int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupNotificationDeliveries, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

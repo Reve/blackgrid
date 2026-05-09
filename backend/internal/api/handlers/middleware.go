@@ -3,13 +3,12 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
-	"os"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
+	"blackgrid/internal/db"
 	"blackgrid/internal/metrics"
-	"blackgrid/internal/service"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/time/rate"
 )
@@ -39,7 +38,7 @@ func StructuredLogger(logger *slog.Logger) echo.MiddlewareFunc {
 			metrics.HttpRequestsTotal.WithLabelValues(req.Method, path, strconv.Itoa(status)).Inc()
 			metrics.HttpRequestDuration.WithLabelValues(req.Method, path).Observe(latency.Seconds())
 
-			user, _ := c.Get("user").(*service.User)
+			user, _ := c.Get("user").(*db.User)
 			userID := ""
 			if user != nil {
 				userID = uuidStr(user.ID)
@@ -112,7 +111,7 @@ func RateLimitMiddleware(r rate.Limit, b int, code string, message string) echo.
 		return func(c echo.Context) error {
 			ip := c.RealIP()
 			if !limiter.GetLimiter(ip).Allow() {
-				return Error(c, ErrCodeRateLimited, message, nil)
+				return c.JSON(http.StatusTooManyRequests, map[string]string{"error": message})
 			}
 			return next(c)
 		}
@@ -155,13 +154,13 @@ func UserRateLimitMiddleware(r rate.Limit, b int, code string, message string) e
 	limiter := NewUserRateLimiter(r, b)
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			user, _ := c.Get("user").(*service.User)
+			user, _ := c.Get("user").(*db.User)
 			if user == nil {
 				return next(c)
 			}
 			userID := uuidStr(user.ID)
 			if !limiter.GetLimiter(userID).Allow() {
-				return Error(c, ErrCodeRateLimited, message, nil)
+				return c.JSON(http.StatusTooManyRequests, map[string]string{"error": message})
 			}
 			return next(c)
 		}
@@ -176,9 +175,6 @@ func SecurityHeaders() echo.MiddlewareFunc {
 			res.Header().Set("X-Content-Type-Options", "nosniff")
 			res.Header().Set("X-Frame-Options", "DENY")
 			res.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-			// Content-Security-Policy is tricky without knowing the environment,
-			// but we can add a basic one.
-			// res.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; object-src 'none';")
 			return next(c)
 		}
 	}
