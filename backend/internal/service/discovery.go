@@ -16,6 +16,7 @@ import (
 
 	"blackgrid/internal/db"
 	"blackgrid/internal/events"
+	"blackgrid/internal/metrics"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -195,6 +196,7 @@ func (s *DiscoveryService) StartManualScan(ctx context.Context, prefixID pgtype.
 
 // RunScan executes a queued scan synchronously.
 func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) error {
+	start := time.Now()
 	scan, err := s.q.GetDiscoveryScan(ctx, scanID)
 	if err != nil {
 		return err
@@ -303,6 +305,9 @@ func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) erro
 		Status:      "completed",
 		CompletedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	})
+
+	metrics.DiscoveryScansTotal.WithLabelValues("completed").Inc()
+
 	if err == nil && s.bus != nil {
 		s.bus.Publish(ctx, events.Event{
 			Type:       events.DiscoveryScanCompleted,
@@ -448,6 +453,8 @@ func (s *DiscoveryService) failScan(ctx context.Context, scanID pgtype.UUID, sca
 		CompletedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		Error:       pgtype.Text{String: scanErr.Error(), Valid: true},
 	})
+
+	metrics.DiscoveryScansTotal.WithLabelValues("failed").Inc()
 
 	if s.bus != nil {
 		s.bus.Publish(ctx, events.Event{

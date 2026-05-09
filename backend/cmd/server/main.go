@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,26 +21,55 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
-	e := echo.New()
+	// 1. Structured Logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 
-	e.Use(middleware.Logger())
+	e := echo.New()
+	e.HideBanner = true
+	e.HTTPErrorHandler = handlers.CustomHTTPErrorHandler
+
+	// 2. Middleware
+	e.Use(middleware.RequestID())
+	e.Use(handlers.StructuredLogger(logger))
 	e.Use(middleware.Recover())
+	e.Use(handlers.SecurityHeaders())
+
+	// 3. CORS Configuration
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "http://localhost:5173,http://localhost:3000"
+	}
+	origins := strings.Split(allowedOrigins, ",")
+
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowOrigins:     origins,
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
-		AllowCredentials: true, // required for session cookies cross-origin
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization, echo.HeaderXRequestID},
+		AllowCredentials: true,
 	}))
 
+	// 4. Database Pool Configuration
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		dbURL = "postgres://blackgrid:blackgrid@localhost:5432/blackgrid?sslmode=disable"
 	}
 
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	config, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		log.Fatalf("Unable to parse DATABASE_URL: %v\n", err)
+	}
+
+	config.MaxConns = int32(getEnvInt("DB_MAX_OPEN_CONNS", 25))
+	config.MaxConnIdleTime = time.Duration(getEnvInt("DB_MAX_IDLE_CONNS", 10))
+	config.MaxConnLifetime = time.Duration(getEnvInt("DB_CONN_MAX_LIFETIME_MINUTES", 30)) * time.Minute
+	config.MaxConnIdleTime = time.Duration(getEnvInt("DB_CONN_MAX_IDLE_TIME_MINUTES", 10)) * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
@@ -58,7 +90,20 @@ func main() {
 	deviceSvc := service.NewDeviceService(queries, bus)
 	discoverySvc := service.NewDiscoveryService(queries, bus)
 
-	// Start background scheduled scans with a cancelable context for graceful shutdown.
+	// 5. Data Retention Service
+	retentionSvc := service.NewRetentionService(queries)
+	retentionCfg := service.RetentionConfig{
+		MonitorResultsDays:         getEnvInt("RETENTION_MONITOR_RESULTS_DAYS", 90),
+		NotificationDeliveriesDays: getEnvInt("RETENTION_NOTIFICATION_DELIVERIES_DAYS", 30),
+		AuditLogDays:               getEnvInt("RETENTION_AUDIT_LOG_DAYS", 365),
+		DiscoveryResultsDays:       getEnvInt("RETENTION_DISCOVERY_RESULTS_DAYS", 90),
+		DiscoveryScansDays:         getEnvInt("RETENTION_DISCOVERY_SCANS_DAYS", 90),
+		IntervalHours:              getEnvInt("RETENTION_CLEANUP_INTERVAL_HOURS", 24),
+	}
+	retentionCtx, cancelRetention := context.WithCancel(context.Background())
+	go retentionSvc.Start(retentionCtx, retentionCfg)
+
+	// Start background scheduled scans
 	schedCtx, cancelScheduler := context.WithCancel(context.Background())
 	schedDone := make(chan struct{})
 	go func() {
@@ -93,21 +138,43 @@ func main() {
 	adminMW := handlers.RequireAdmin()
 	operatorMW := handlers.RequireOperator()
 
+	// 6. Rate Limiting
+	loginLimiter := handlers.RateLimitMiddleware(2.0/300.0, 10, handlers.ErrCodeRateLimited, "Too many login attempts") // 10 per 5m
+	setupLimiter := handlers.RateLimitMiddleware(1.0/120.0, 5, handlers.ErrCodeRateLimited, "Too many setup attempts") // 5 per 10m
+	apiTokenLimiter := handlers.UserRateLimitMiddleware(30.0/3600.0, 30, handlers.ErrCodeRateLimited, "API token creation limit exceeded")
+	notifTestLimiter := handlers.UserRateLimitMiddleware(20.0/3600.0, 20, handlers.ErrCodeRateLimited, "Notification test limit exceeded")
+	monitorTestLimiter := handlers.UserRateLimitMiddleware(60.0/3600.0, 60, handlers.ErrCodeRateLimited, "Monitor test limit exceeded")
+	pushLimiter := handlers.RateLimitMiddleware(2.0, 120, handlers.ErrCodeRateLimited, "Push rate limit exceeded") // 120 per min
+
 	// ---- Public status endpoint (no auth required) ----
 	e.GET("/status/:slug", statusPageHandler.PublicStatusPage)
 
 	// ---- Push heartbeat endpoint (token-authenticated, no user auth) ----
-	e.GET("/push/:token", monitorHandler.ReceivePushHeartbeat)
-	e.POST("/push/:token", monitorHandler.ReceivePushHeartbeat)
+	e.GET("/push/:token", monitorHandler.ReceivePushHeartbeat, pushLimiter)
+	e.POST("/push/:token", monitorHandler.ReceivePushHeartbeat, pushLimiter)
+
+	// 7. Metrics endpoint
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	// ---- API v1 group ----
 	v1 := e.Group("/api/v1")
 
 	// Public routes (no auth required)
 	v1.GET("/health", h.Health)
+	v1.GET("/ready", func(c echo.Context) error {
+		if err := pool.Ping(c.Request().Context()); err != nil {
+			return handlers.Error(c, handlers.ErrCodeServiceUnavailable, "Database unavailable", nil)
+		}
+		return c.JSON(http.StatusOK, map[string]string{
+			"status":   "ok",
+			"database": "ok",
+			"time":     time.Now().Format(time.RFC3339),
+		})
+	})
+
 	v1.GET("/setup/status", authHandler.SetupStatus)
-	v1.POST("/setup/admin", authHandler.SetupAdmin)
-	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/setup/admin", authHandler.SetupAdmin, setupLimiter)
+	v1.POST("/auth/login", authHandler.Login, loginLimiter)
 	v1.POST("/auth/logout", authHandler.Logout)
 
 	// Protected routes — require authentication
@@ -119,7 +186,7 @@ func main() {
 	// Events stream
 	api.GET("/events/stream", eventHandler.StreamEvents)
 
-	// Sites — viewer can GET, operator+ can mutate
+	// Sites
 	api.GET("/sites", h.GetSites)
 	api.GET("/sites/:id", h.GetSite)
 	api.POST("/sites", h.CreateSite, operatorMW)
@@ -173,7 +240,7 @@ func main() {
 	api.DELETE("/monitors/:id", monitorHandler.DeleteMonitor, operatorMW)
 	api.POST("/monitors/:id/pause", monitorHandler.PauseMonitor, operatorMW)
 	api.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor, operatorMW)
-	api.POST("/monitors/:id/test", monitorHandler.TestMonitor, operatorMW)
+	api.POST("/monitors/:id/test", monitorHandler.TestMonitor, operatorMW, monitorTestLimiter)
 	api.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
 	api.POST("/monitors/:id/rotate-push-token", monitorHandler.RotatePushToken, operatorMW)
 
@@ -184,15 +251,15 @@ func main() {
 	api.POST("/incidents/:id/acknowledge", incidentHandler.AcknowledgeIncident, operatorMW)
 	api.POST("/incidents/:id/resolve", incidentHandler.ResolveIncident, operatorMW)
 
-	// Notification channels — admin only for mutation
+	// Notification channels
 	api.GET("/notification-channels", notificationHandler.ListChannels)
 	api.POST("/notification-channels", notificationHandler.CreateChannel, adminMW)
 	api.GET("/notification-channels/:id", notificationHandler.GetChannel)
 	api.PATCH("/notification-channels/:id", notificationHandler.UpdateChannel, adminMW)
 	api.DELETE("/notification-channels/:id", notificationHandler.DeleteChannel, adminMW)
-	api.POST("/notification-channels/:id/test", notificationHandler.TestChannel, adminMW)
+	api.POST("/notification-channels/:id/test", notificationHandler.TestChannel, adminMW, notifTestLimiter)
 
-	// Status pages (admin)
+	// Status pages
 	api.GET("/status-pages", statusPageHandler.ListStatusPages)
 	api.POST("/status-pages", statusPageHandler.CreateStatusPage, operatorMW)
 	api.GET("/status-pages/:id", statusPageHandler.GetStatusPage)
@@ -203,44 +270,76 @@ func main() {
 	api.DELETE("/status-pages/:id/monitors/:monitor_id", statusPageHandler.RemoveAttachedMonitor, operatorMW)
 	api.POST("/status-pages/:id/monitors/reorder", statusPageHandler.ReorderMonitors, operatorMW)
 
-	// Users — admin only
+	// Users
 	api.GET("/users", authHandler.ListUsers, adminMW)
 	api.POST("/users", authHandler.CreateUser, adminMW)
 	api.GET("/users/:id", authHandler.GetUser, adminMW)
 	api.PATCH("/users/:id", authHandler.UpdateUser, adminMW)
 	api.DELETE("/users/:id", authHandler.DeleteUser, adminMW)
 
-	// API tokens — admin only
+	// API tokens
 	api.GET("/api-tokens", authHandler.ListAPITokens, adminMW)
-	api.POST("/api-tokens", authHandler.CreateAPIToken, adminMW)
+	api.POST("/api-tokens", authHandler.CreateAPIToken, adminMW, apiTokenLimiter)
 	api.DELETE("/api-tokens/:id", authHandler.DeleteAPIToken, adminMW)
 
-	// Audit log — admin only
+	// Audit log
 	api.GET("/audit-log", authHandler.ListAuditLog, adminMW)
+
+	// Admin actions
+	admin := api.Group("/admin", adminMW)
+	admin.POST("/retention/run", func(c echo.Context) error {
+		retentionSvc.Run(c.Request().Context(), retentionCfg)
+		return c.JSON(http.StatusOK, map[string]string{"status": "scheduled"})
+	})
 
 	// ---- Server start ----
 	go func() {
-		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
 			e.Logger.Fatal("shutting down the server")
 		}
 	}()
 
+	// 8. Graceful Shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
+	log.Println("Shutting down Blackgrid...")
+	
 	monitorScheduler.Stop()
-
 	cancelScheduler()
+	cancelRetention()
+
 	select {
 	case <-schedDone:
+		log.Println("Discovery scheduler stopped")
 	case <-time.After(5 * time.Second):
-		log.Println("discovery scheduler did not stop within 5s")
+		log.Println("Discovery scheduler did not stop within 5s")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownTimeout := time.Duration(getEnvInt("SHUTDOWN_TIMEOUT_SECONDS", 20)) * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
+	
 	if err := e.Shutdown(ctx); err != nil {
 		e.Logger.Fatal(err)
 	}
+	
+	log.Println("Blackgrid exited cleanly")
+}
+
+func getEnvInt(key string, def int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return def
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return def
+	}
+	return n
 }

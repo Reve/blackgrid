@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
 import type { Monitor, MonitorResult } from "../api/client";
-import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor, resumeMonitor, testMonitor, getMonitorResults, rotatePushToken } from '../api/client';
+import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor, resumeMonitor, testMonitor, getMonitorResults, rotatePushToken, ApiErrorDetail } from '../api/client';
 import { useEvents } from '../context/EventContext';
+import { Loading, ErrorState, EmptyState, ConfirmDialog } from '../components/UI';
+import { useToast } from '../context/ToastContext';
 
 export default function Monitors() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonitor, setSelectedMonitor] = useState<Monitor | null>(null);
   const [results, setResults] = useState<MonitorResult[]>([]);
+  const [error, setError] = useState<ApiErrorDetail | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const { subscribe } = useEvents();
+  const { success, error: toastError } = useToast();
+
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmRotate, setConfirmRotate] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Partial<Monitor>>({
@@ -57,8 +65,9 @@ export default function Monitors() {
     try {
       const res = await getMonitors();
       setMonitors(res.data);
-    } catch (err) {
-      console.error(err);
+      setError(null);
+    } catch (err: any) {
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -66,17 +75,18 @@ export default function Monitors() {
 
   const handleTest = async (m: Monitor) => {
     if (m.monitor_type === 'push') {
-        alert('Push monitors cannot be tested manually. Use the push endpoint.');
+        toastError('Push monitors cannot be tested manually. Use the push endpoint.');
         return;
     }
     try {
       await testMonitor(m.id);
+      success(`Test initiated for ${m.name}`);
       fetchMonitors();
       if (selectedMonitor?.id === m.id) {
         fetchResults(m.id);
       }
-    } catch (err) {
-      console.error('Test failed', err);
+    } catch (err: any) {
+      toastError(err.message || 'Test failed');
     }
   };
 
@@ -111,12 +121,15 @@ export default function Monitors() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     try {
       let res;
       if (formData.id) {
         res = await updateMonitor(formData.id, formData);
+        success('Monitor updated');
       } else {
         res = await createMonitor(formData);
+        success('Monitor created');
         if (formData.monitor_type === 'push' && (res.data as any).generated_push_token) {
             const token = (res.data as any).generated_push_token;
             setGeneratedToken({
@@ -129,32 +142,36 @@ export default function Monitors() {
           setShowForm(false);
       }
       fetchMonitors();
-    } catch (err) {
-      console.error('Save failed', err);
+    } catch (err: any) {
+      toastError(err.message || 'Save failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleRotateToken = async (id: string) => {
-      if (!confirm('Are you sure you want to rotate the push token? Old token will stop working immediately.')) return;
+      setConfirmRotate(null);
       try {
           const res = await rotatePushToken(id);
+          success('Push token rotated');
           setGeneratedToken({
               token: res.data.token,
               url: `${window.location.protocol}//${window.location.host}${res.data.push_url}`
           });
-      } catch (err) {
-          console.error('Rotation failed', err);
+      } catch (err: any) {
+          toastError(err.message || 'Rotation failed');
       }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this monitor?')) return;
+    setConfirmDelete(null);
     try {
       await deleteMonitor(id);
+      success('Monitor deleted');
       setSelectedMonitor(null);
       fetchMonitors();
-    } catch (err) {
-      console.error('Delete failed', err);
+    } catch (err: any) {
+      toastError(err.message || 'Delete failed');
     }
   };
 
@@ -179,7 +196,8 @@ export default function Monitors() {
     setGeneratedToken(null);
   };
 
-  if (loading) return <div className="p-4 text-text-muted">Loading monitors...</div>;
+  if (loading) return <Loading message="Accessing system monitors..." />;
+  if (error) return <ErrorState error={error} onRetry={fetchMonitors} />;
 
   return (
     <div className="flex gap-4 h-full">
@@ -372,7 +390,9 @@ export default function Monitors() {
                     <input type="number" min="1" className="input w-full" required value={formData.retry_count || 3} onChange={e => setFormData({...formData, retry_count: parseInt(e.target.value)})} />
                   </div>
                 </div>
-                <button type="submit" className="btn mt-4">Save Monitor</button>
+                <button type="submit" disabled={submitting} className="btn mt-4">
+                  {submitting ? 'Saving...' : 'Save Monitor'}
+                </button>
             </form>
           )}
         </div>
@@ -384,7 +404,7 @@ export default function Monitors() {
             <h3 className="text-lg text-signal-green">{selectedMonitor.name}</h3>
             <div className="flex gap-2">
               <button className="text-text-muted hover:text-text-main text-sm" onClick={() => openEditForm(selectedMonitor)}>Edit</button>
-              <button className="text-signal-red hover:text-red-400 text-sm" onClick={() => handleDelete(selectedMonitor.id)}>Delete</button>
+              <button className="text-signal-red hover:text-red-400 text-sm" onClick={() => setConfirmDelete(selectedMonitor.id)}>Delete</button>
               <button className="text-text-muted hover:text-text-main" onClick={() => setSelectedMonitor(null)}>✕</button>
             </div>
           </div>
@@ -410,7 +430,7 @@ export default function Monitors() {
                         <span className="text-text-muted">Grace Period</span>
                         <span className="text-text-main">{selectedMonitor.config?.grace_seconds || 120}s</span>
                     </div>
-                    <button className="btn text-[10px] w-full" onClick={() => handleRotateToken(selectedMonitor.id)}>Rotate Push Token</button>
+                    <button className="btn text-[10px] w-full" onClick={() => setConfirmRotate(selectedMonitor.id)}>Rotate Push Token</button>
                     {generatedToken && (
                         <div className="mt-2 p-2 bg-black border border-signal-green text-[10px] font-mono break-all select-all">
                             {generatedToken.url}
@@ -473,6 +493,27 @@ export default function Monitors() {
           </div>
         </div>
       )}
+      )}
+
+      <ConfirmDialog
+        isOpen={!!confirmDelete}
+        title="Delete Monitor"
+        message="Are you sure you want to delete this monitor? This action cannot be undone."
+        onConfirm={() => confirmDelete && handleDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+        confirmLabel="Delete"
+        isDestructive
+      />
+
+      <ConfirmDialog
+        isOpen={!!confirmRotate}
+        title="Rotate Push Token"
+        message="Are you sure you want to rotate the push token? The old token will stop working immediately."
+        onConfirm={() => confirmRotate && handleRotateToken(confirmRotate)}
+        onCancel={() => setConfirmRotate(null)}
+        confirmLabel="Rotate"
+        isDestructive
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import (
 
 	"blackgrid/internal/db"
 	"blackgrid/internal/events"
+	"blackgrid/internal/metrics"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -289,6 +290,8 @@ func (s *NotificationService) deliver(ctx context.Context, channel db.Notificati
 	} else {
 		sentAt = pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	}
+
+	metrics.NotificationDeliveriesTotal.WithLabelValues(channel.ChannelType, status).Inc()
 
 	delivery, err := s.q.CreateNotificationDelivery(ctx, db.CreateNotificationDeliveryParams{
 		ChannelID: channel.ID,

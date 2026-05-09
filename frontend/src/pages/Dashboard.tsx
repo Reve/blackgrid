@@ -3,6 +3,8 @@ import type { Incident, IncidentCounts, Monitor, StatusPage } from '../api/clien
 import { getIncidentCounts, getMonitors, listIncidents, listStatusPages } from '../api/client';
 import { useEvents } from '../context/EventContext';
 import { Event } from '../lib/events/types';
+import { Loading, ErrorState } from '../components/UI';
+import { ApiErrorDetail } from '../api/client';
 
 export default function Dashboard() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
@@ -11,6 +13,7 @@ export default function Dashboard() {
   const [recentResolved, setRecentResolved] = useState<Incident[]>([]);
   const [statusPages, setStatusPages] = useState<StatusPage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<ApiErrorDetail | null>(null);
   const { subscribe, lastEvents } = useEvents();
 
   const load = async () => {
@@ -27,8 +30,10 @@ export default function Dashboard() {
       setActiveIncidents(active.data ?? []);
       setRecentResolved(resolved.data ?? []);
       setStatusPages(sp.data ?? []);
-    } catch (err) {
+      setError(null);
+    } catch (err: any) {
       console.error(err);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -56,7 +61,8 @@ export default function Dashboard() {
     };
   }, [subscribe]);
 
-  if (loading) return <div className="p-4 text-text-muted">Loading dashboard...</div>;
+  if (loading) return <Loading message="Syncing Dashboard..." />;
+  if (error) return <ErrorState error={error} onRetry={load} />;
 
   const monitorById: Record<string, Monitor> = {};
   for (const m of monitors) monitorById[m.id] = m;

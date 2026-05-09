@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"blackgrid/internal/events"
+	"blackgrid/internal/metrics"
 
 	"github.com/labstack/echo/v4"
 )
@@ -42,7 +43,11 @@ func (h *EventHandler) StreamEvents(c echo.Context) error {
 	}
 
 	ch, unsubscribe := h.bus.Subscribe(c.Request().Context(), filter)
-	defer unsubscribe()
+	metrics.SseClientsCurrent.Inc()
+	defer func() {
+		unsubscribe()
+		metrics.SseClientsCurrent.Dec()
+	}()
 
 	// Flush the headers
 	c.Response().Flush()

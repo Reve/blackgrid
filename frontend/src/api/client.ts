@@ -2,8 +2,34 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
-  withCredentials: true, // required for session cookie
+  withCredentials: true,
 });
+
+export interface ApiErrorDetail {
+  code: string;
+  message: string;
+  request_id?: string;
+  details?: Record<string, any>;
+}
+
+export interface ApiErrorResponse {
+  error: ApiErrorDetail;
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.data && error.response.data.error) {
+      // It's our consistent error format
+      return Promise.reject(error.response.data.error as ApiErrorDetail);
+    }
+    // Fallback for other errors (network, etc.)
+    return Promise.reject({
+      code: 'network_error',
+      message: error.message || 'An unexpected error occurred',
+    } as ApiErrorDetail);
+  }
+);
 
 // ---- Existing types ----
 
@@ -303,6 +329,19 @@ export const reorderStatusPageMonitors = (id: string, monitorIds: string[]) =>
 
 // Public status page is at the root, not under /api/v1.
 const publicAxios = axios.create({ baseURL: 'http://localhost:8080' });
+
+publicAxios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.data && error.response.data.error) {
+      return Promise.reject(error.response.data.error as ApiErrorDetail);
+    }
+    return Promise.reject({
+      code: 'network_error',
+      message: error.message || 'An unexpected error occurred',
+    } as ApiErrorDetail);
+  }
+);
 export const getPublicStatusPage = (slug: string) =>
   publicAxios.get<PublicStatusPageResponse>(`/status/${slug}`);
 

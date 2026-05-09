@@ -6,7 +6,10 @@ import {
   startPrefixScan,
   listDiscoveryScans,
   updatePrefixScanConfig,
+  ApiErrorDetail,
 } from '../api/client';
+import { Loading, ErrorState, EmptyState } from '../components/UI';
+import { useToast } from '../context/ToastContext';
 
 export default function IPAM() {
   const [prefixes, setPrefixes] = useState<Prefix[]>([]);
@@ -14,37 +17,40 @@ export default function IPAM() {
   const [scansByPrefix, setScansByPrefix] = useState<Record<string, DiscoveryScan>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string>('');
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<ApiErrorDetail | null>(null);
+  const { success, error: toastError } = useToast();
 
-  const loadAll = async () => {
-    const [prefixesRes, ipsRes, scansRes] = await Promise.all([
-      getPrefixes(),
-      getIPAddresses(),
-      listDiscoveryScans({ limit: 200 }),
-    ]);
-    setPrefixes(prefixesRes.data || []);
-    setIps(ipsRes.data || []);
-    const latest: Record<string, DiscoveryScan> = {};
-    for (const s of scansRes.data || []) {
-      if (!latest[s.prefix_id]) latest[s.prefix_id] = s;
+    try {
+      const [prefixesRes, ipsRes, scansRes] = await Promise.all([
+        getPrefixes(),
+        getIPAddresses(),
+        listDiscoveryScans({ limit: 200 }),
+      ]);
+      setPrefixes(prefixesRes.data || []);
+      setIps(ipsRes.data || []);
+      const latest: Record<string, DiscoveryScan> = {};
+      for (const s of scansRes.data || []) {
+        if (!latest[s.prefix_id]) latest[s.prefix_id] = s;
+      }
+      setScansByPrefix(latest);
+      setError(null);
+    } catch (e: any) {
+      setError(e);
     }
-    setScansByPrefix(latest);
   };
 
   useEffect(() => {
-    loadAll()
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+    loadAll().finally(() => setLoading(false));
   }, []);
 
   const handleScanNow = async (prefixId: string) => {
-    setError('');
     setBusy(prefixId);
     try {
       await startPrefixScan(prefixId);
+      success('Scan queued successfully');
       await loadAll();
     } catch (e: any) {
-      setError(e?.response?.data?.error || e?.message || 'Failed to start scan');
+      toastError(e.message || 'Failed to start scan');
     } finally {
       setBusy('');
     }
@@ -65,22 +71,23 @@ export default function IPAM() {
 
   const handleIntervalChange = async (p: Prefix, value: number) => {
     if (value < 60) {
-      setError('Interval must be >= 60 seconds');
+      toastError('Interval must be >= 60 seconds');
       return;
     }
-    setError('');
     try {
       await updatePrefixScanConfig(p.id, {
         scan_enabled: !!p.scan_enabled,
         scan_interval_seconds: value,
       });
+      success('Scan interval updated');
       await loadAll();
     } catch (e: any) {
-      setError(e?.response?.data?.error || 'Failed to update scan config');
+      toastError(e.message || 'Failed to update scan config');
     }
   };
 
-  if (loading) return <div className="p-4 text-signal-amber">Loading IPAM data...</div>;
+  if (loading) return <Loading message="Accessing IPAM records..." />;
+  if (error) return <ErrorState error={error} onRetry={loadAll} />;
 
   return (
     <div className="space-y-6">

@@ -1,103 +1,69 @@
 # Blackgrid
 
-Blackgrid is a homelab IPAM (IP Address Management) and endpoint monitoring
-application. Phase 3 adds **incident management** and **notification
-channels** (webhook, SMTP) so monitor failures turn into actionable alerts —
-see [docs/incidents.md](docs/incidents.md) and
-[docs/notifications.md](docs/notifications.md).
+Blackgrid is a powerful, production-hardened homelab IPAM (IP Address Management) and endpoint monitoring application. It combines traditional IPAM features with a modern, real-time monitoring suite and an event-driven notification engine.
 
-## Prerequisites
+## Key Features
 
-- Docker
-- Docker Compose
+- **Robust IPAM**: Manage sites, VLANs, prefixes, and IP addresses with automatic discovery and reconciliation.
+- **Advanced Monitoring**: Proactive checks for HTTP, TCP, Ping, DNS, TLS Certificates, and custom Push heartbeats.
+- **Incident Management**: Automated incident lifecycle with severity levels, acknowledgement, and resolution workflows.
+- **Event-Driven Architecture**: Real-time dashboard updates via SSE and a flexible notification engine (Webhooks, SMTP).
+- **Security First**: RBAC, audit logging, rate limiting, and secure header management.
+- **Production Ready**: Prometheus metrics, health/readiness probes, data retention policies, and graceful shutdown.
 
-## Startup
+## Quick Start
 
-Run the application using Docker Compose:
+### Docker Compose (Recommended)
+
+Run the entire stack using Docker Compose:
 
 ```bash
-docker-compose up --build
+docker-compose up --build -d
 ```
 
-The services will be accessible at:
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:8080
-- **PostgreSQL Database:** localhost:5432 (default credentials: `blackgrid` / `blackgrid`)
+Access the application at:
+- **Frontend**: [http://localhost:3000](http://localhost:3000)
+- **Backend API**: [http://localhost:8080](http://localhost:8080)
+- **Metrics**: `http://localhost:8080/metrics`
+
+### First Time Setup
+
+1. Navigate to `http://localhost:3000/setup`.
+2. Create your initial Administrator account.
+3. Configure your first Site and Prefix to begin scanning your network.
+
+## Documentation
+
+Detailed documentation is available in the `docs` directory:
+
+- **[Deployment Guide](docs/deployment.md)**: Environment variables, Docker config, and scaling.
+- **[Operations Guide](docs/operations.md)**: Monitoring, backups, and maintenance.
+- **[Security Overview](docs/security.md)**: Auth, encryption, and protection mechanisms.
+- **[IPAM & Discovery](docs/discovery.md)**: How network scanning works.
+- **[Monitoring & Incidents](docs/incidents.md)**: Monitor types and incident lifecycle.
+- **[Notification Engine](docs/notifications.md)**: Webhooks, SMTP, and event payloads.
+- **[Status Pages](docs/status-pages.md)**: Public health pages and uptime calculation.
+- **[API Reference](docs/api.md)**: Full REST API documentation.
 
 ## Development
 
 ### Backend (Go)
-
 ```bash
 cd backend
 go run cmd/server/main.go
 ```
 
-To run tests:
-```bash
-cd backend
-go test ./...
-```
-
 ### Frontend (React + Vite)
-
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Discovery
+## Contributing
 
-Blackgrid scans **stored prefixes only** — arbitrary CIDR values are never
-accepted from the API. See [docs/discovery.md](docs/discovery.md) for full
-details and [docs/api.md](docs/api.md) for the endpoint reference.
+Contributions are welcome! Please see the contribution guidelines (coming soon) for more information.
 
-Default TCP probe ports: `22, 53, 80, 443, 5432, 6379, 8000, 8080, 9000, 9443`.
+## License
 
-### Environment variables
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DISCOVERY_WORKERS` | `64` | Worker pool size for parallel probing |
-| `DISCOVERY_MAX_IPV4_PREFIX_SIZE` | `22` | Reject manual scans of IPv4 prefixes shorter than this (e.g. `/16` is rejected) |
-| `DISCOVERY_TCP_TIMEOUT_MS` | `750` | Per-port TCP connect timeout |
-| `DISCOVERY_PING_TIMEOUT_MS` | `750` | ICMP timeout (only used when ping is available) |
-
-IPv6 full-range scanning is unsupported. Inside Docker, ICMP and ARP/MAC
-discovery require additional capabilities; Blackgrid falls back to TCP-only
-discovery without them.
-
-## Incidents and notifications
-
-When a scheduled monitor transitions to `down` or `degraded`, Blackgrid opens
-an incident automatically and (if any notification channels are enabled)
-delivers an `incident.opened` event. Recovery (`up`) auto-resolves the
-incident and emits `incident.resolved`.
-
-- API reference: [docs/api.md](docs/api.md) (Incidents and Notification
-  channel sections).
-- Lifecycle rules: [docs/incidents.md](docs/incidents.md).
-- Channel config and event payloads: [docs/notifications.md](docs/notifications.md).
-
-Notification secrets (SMTP passwords, webhook bearer tokens) are stored as
-JSONB in PostgreSQL **without an additional encryption layer** in this phase
-— protect the database accordingly.
-
-## Status pages
-
-Phase 5 adds **status pages**: group selected monitors into an internal or
-public-facing health overview with aggregate status, per-service uptime, and
-recent incidents. Public pages are served at:
-
-```
-GET /status/{slug}
-```
-
-Pages with `public=false` return `404` at the public route (existence is not
-leaked). The public response strictly excludes monitor config, IPAM/device
-metadata, notification channels, raw check details, and internal notes.
-
-See [docs/status-pages.md](docs/status-pages.md) for the data model, safe
-exposure rules, aggregate-status logic, and uptime calculation; the admin
-and public endpoint reference is in [docs/api.md](docs/api.md).
+MIT

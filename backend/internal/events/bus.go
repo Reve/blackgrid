@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"blackgrid/internal/metrics"
 )
 
 type Subscriber struct {
@@ -36,6 +37,8 @@ func (b *EventBus) Publish(ctx context.Context, event Event) {
 	if event.ID == "" {
 		event.ID = uuid.New().String()
 	}
+
+	metrics.EventBusEventsTotal.WithLabelValues(string(event.Type)).Inc()
 
 	for _, sub := range b.subscribers {
 		// Apply filters if any

@@ -8,6 +8,7 @@ import (
 
 	"blackgrid/internal/db"
 	"blackgrid/internal/events"
+	"blackgrid/internal/metrics"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -69,6 +70,8 @@ func (s *IncidentService) OpenForMonitor(ctx context.Context, monitor db.Monitor
 		return db.Incident{}, false, err
 	}
 
+	metrics.IncidentsOpen.Inc()
+
 	if s.notifier != nil {
 		go func(inc db.Incident, m db.Monitor) {
 			defer func() {
@@ -113,6 +116,8 @@ func (s *IncidentService) ResolveForMonitor(ctx context.Context, monitor db.Moni
 	if err != nil {
 		return db.Incident{}, false, err
 	}
+
+	metrics.IncidentsOpen.Dec()
 
 	if s.notifier != nil {
 		go func(inc db.Incident, m db.Monitor) {
@@ -190,6 +195,8 @@ func (s *IncidentService) Resolve(ctx context.Context, id pgtype.UUID, note stri
 	if err != nil {
 		return db.Incident{}, err
 	}
+
+	metrics.IncidentsOpen.Dec()
 
 	if s.notifier != nil {
 		monitor, mErr := s.q.GetMonitor(ctx, resolved.MonitorID)

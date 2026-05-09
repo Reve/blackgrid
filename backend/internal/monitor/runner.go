@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/metrics"
 	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type Runner struct {
@@ -43,7 +45,12 @@ func (r *Runner) Run(ctx context.Context, monitor db.Monitor) (CheckResult, erro
 		return CheckResult{}, fmt.Errorf("unsupported monitor type: %s", monitor.MonitorType)
 	}
 
+	start := time.Now()
 	result := checker.Check(ctx, monitor)
+	latencyObs := time.Since(start)
+
+	metrics.MonitorChecksTotal.WithLabelValues(monitor.MonitorType, result.Status).Inc()
+	metrics.MonitorCheckDuration.WithLabelValues(monitor.MonitorType).Observe(latencyObs.Seconds())
 
 	var errorMsg pgtype.Text
 	if result.ErrorMessage != "" {

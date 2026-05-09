@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { EventProvider, useEvents } from './context/EventContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { useEffect, useState } from 'react';
 import { getSetupStatus } from './api/client';
 
@@ -67,16 +68,16 @@ function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="container mx-auto flex-grow flex p-4 gap-6">
-        <aside className="w-48 flex-shrink-0">
-          <nav className="space-y-2">
+      <div className="container mx-auto flex-grow flex flex-col md:flex-row p-4 gap-6 min-h-0">
+        <aside className="w-full md:w-48 flex-shrink-0">
+          <nav className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`block px-4 py-2 rounded text-sm transition-colors ${
+                className={`block px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
                   location.pathname === item.path
-                    ? 'bg-signal-green/10 text-signal-green border-l-2 border-signal-green'
+                    ? 'bg-signal-green/10 text-signal-green border-l-0 md:border-l-2 border-b-2 md:border-b-0 border-signal-green'
                     : 'text-text-muted hover:text-text-main hover:bg-surface'
                 }`}
               >
@@ -85,8 +86,8 @@ function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
         </aside>
-
-        <main className="flex-grow">
+        
+        <main className="flex-grow min-w-0 overflow-hidden flex flex-col">
           {children}
         </main>
       </div>
@@ -160,9 +161,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <EventProvider>
-          <AppRoutes />
-        </EventProvider>
+        <ToastProvider>
+          <EventProvider>
+            <AppRoutes />
+          </EventProvider>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );
