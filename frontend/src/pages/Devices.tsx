@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { getDevices, Device } from '../api/client';
+import { useEffect, useState } from 'react';
+import type { Device } from "../api/client";
+import { getDevices } from '../api/client';
 
 export default function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);

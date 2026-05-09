@@ -64,10 +64,19 @@ CREATE TABLE ip_addresses (
 CREATE TABLE monitors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL,
+    slug VARCHAR(255) NOT NULL UNIQUE,
+    monitor_type VARCHAR(50) NOT NULL, -- http, tcp, ping
     target VARCHAR(255) NOT NULL,
-    interval_seconds INTEGER DEFAULT 60,
-    status VARCHAR(50) DEFAULT 'active',
+    config JSONB,
+    ip_address_id UUID REFERENCES ip_addresses(id) ON DELETE SET NULL,
+    device_id UUID REFERENCES devices(id) ON DELETE SET NULL,
+    interval_seconds INTEGER NOT NULL DEFAULT 60 CHECK (interval_seconds >= 10),
+    timeout_seconds INTEGER NOT NULL DEFAULT 10 CHECK (timeout_seconds >= 1),
+    retry_count INTEGER NOT NULL DEFAULT 3 CHECK (retry_count >= 1),
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    status VARCHAR(50) NOT NULL DEFAULT 'unknown', -- unknown, up, degraded, down, paused
+    last_checked_at TIMESTAMP WITH TIME ZONE,
+    last_status_change_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
