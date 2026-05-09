@@ -156,7 +156,7 @@ func (s *NotificationService) GetChannel(ctx context.Context, id pgtype.UUID) (d
 // MaskConfig returns the channel config with secrets masked, suitable for API responses.
 func MaskConfig(channel db.NotificationChannel) []byte {
 	if channel.ChannelType != ChannelTypeSMTP {
-		return channel.Config
+		return MaskWebhookHeaders(channel.Config)
 	}
 	var cfg map[string]any
 	if err := json.Unmarshal(channel.Config, &cfg); err != nil {
@@ -171,6 +171,52 @@ func MaskConfig(channel db.NotificationChannel) []byte {
 	}
 	return out
 }
+
+// sensitiveHeaderKeys lists lowercase header name substrings that should be masked.
+var sensitiveHeaderKeys = []string{"authorization", "token", "secret", "key"}
+
+// MaskWebhookHeaders returns webhook config with sensitive header values masked.
+func MaskWebhookHeaders(configBytes []byte) []byte {
+	if len(configBytes) == 0 {
+		return configBytes
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(configBytes, &cfg); err != nil {
+		return configBytes
+	}
+	headers, ok := cfg["headers"]
+	if !ok {
+		return configBytes
+	}
+	headerMap, ok := headers.(map[string]any)
+	if !ok {
+		return configBytes
+	}
+	changed := false
+	for k, v := range headerMap {
+		lk := strings.ToLower(k)
+		for _, sensitive := range sensitiveHeaderKeys {
+			if strings.Contains(lk, sensitive) {
+				if _, isStr := v.(string); isStr {
+					headerMap[k] = maskedSecret
+					changed = true
+				}
+				break
+			}
+		}
+	}
+	if !changed {
+		return configBytes
+	}
+	cfg["headers"] = headerMap
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		return configBytes
+	}
+	return out
+}
+
+
 
 // SendIncidentOpened delivers an incident.opened event to all enabled channels.
 func (s *NotificationService) SendIncidentOpened(ctx context.Context, incident db.Incident, monitor db.Monitor) {

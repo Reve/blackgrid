@@ -2,7 +2,10 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
+  withCredentials: true, // required for session cookie
 });
+
+// ---- Existing types ----
 
 export interface Prefix {
   id: string;
@@ -299,3 +302,113 @@ export const reorderStatusPageMonitors = (id: string, monitorIds: string[]) =>
 const publicAxios = axios.create({ baseURL: 'http://localhost:8080' });
 export const getPublicStatusPage = (slug: string) =>
   publicAxios.get<PublicStatusPageResponse>(`/status/${slug}`);
+
+// ---- Phase 6: Auth ----
+
+export type UserRole = 'admin' | 'operator' | 'viewer';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: UserRole;
+  enabled: boolean;
+  last_login_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface SetupStatus {
+  setup_required: boolean;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface SetupAdminRequest {
+  email: string;
+  display_name: string;
+  password: string;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  display_name: string;
+  password: string;
+  role: UserRole;
+  enabled?: boolean;
+}
+
+export interface UpdateUserRequest {
+  display_name?: string;
+  role?: UserRole;
+  enabled?: boolean;
+  password?: string;
+}
+
+export interface ApiToken {
+  id: string;
+  user_id: string;
+  name: string;
+  role: UserRole;
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface CreateApiTokenRequest {
+  user_id: string;
+  name: string;
+  role: UserRole;
+  expires_at?: string | null;
+}
+
+export interface CreateApiTokenResponse {
+  token: string; // plaintext — shown once
+  api_token: ApiToken;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  actor_user_id: string | null;
+  actor_type: string | null;
+  actor_api_token_id: string | null;
+  object_type: string | null;
+  object_id: string | null;
+  before_state: any;
+  after_state: any;
+  created_at: string;
+}
+
+export const getSetupStatus = () => api.get<SetupStatus>('/setup/status');
+export const setupAdmin = (data: SetupAdminRequest) => api.post<AuthUser>('/setup/admin', data);
+export const login = (data: LoginRequest) =>
+  api.post<{ user: AuthUser }>('/auth/login', data);
+export const logout = () => api.post('/auth/logout');
+export const getMe = () => api.get<{ user: AuthUser }>('/auth/me');
+
+export const listUsers = () => api.get<AuthUser[]>('/users');
+export const createUser = (data: CreateUserRequest) => api.post<AuthUser>('/users', data);
+export const getUser = (id: string) => api.get<AuthUser>(`/users/${id}`);
+export const updateUser = (id: string, data: UpdateUserRequest) =>
+  api.patch<AuthUser>(`/users/${id}`, data);
+export const deleteUser = (id: string) => api.delete(`/users/${id}`);
+
+export const listApiTokens = () => api.get<ApiToken[]>('/api-tokens');
+export const createApiToken = (data: CreateApiTokenRequest) =>
+  api.post<CreateApiTokenResponse>('/api-tokens', data);
+export const deleteApiToken = (id: string) => api.delete(`/api-tokens/${id}`);
+
+export const listAuditLog = (params?: {
+  actor_user_id?: string;
+  action?: string;
+  object_type?: string;
+  object_id?: string;
+  limit?: number;
+  offset?: number;
+}) => api.get<AuditLogEntry[]>('/audit-log', { params });

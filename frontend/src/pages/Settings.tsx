@@ -7,6 +7,10 @@ import {
   updateNotificationChannel,
 } from '../api/client';
 import type { ChannelType, NotificationChannel } from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import UsersTab from './UsersTab';
+import ApiTokensTab from './ApiTokensTab';
+import AuditLogTab from './AuditLogTab';
 
 interface FormState {
   id?: string;
@@ -90,7 +94,11 @@ function formToConfig(f: FormState): Record<string, any> {
   return cfg;
 }
 
+type TabId = 'channels' | 'users' | 'tokens' | 'audit';
+
 export default function Settings() {
+  const { isAdmin } = useAuth();
+  const [tab, setTab] = useState<TabId>('channels');
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [editing, setEditing] = useState<FormState | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -151,81 +159,83 @@ export default function Settings() {
     await load();
   };
 
+  const tabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
+    { id: 'channels', label: 'NOTIFICATIONS' },
+    { id: 'users', label: 'USERS', adminOnly: true },
+    { id: 'tokens', label: 'API TOKENS', adminOnly: true },
+    { id: 'audit', label: 'AUDIT LOG', adminOnly: true },
+  ];
+
   return (
     <div className="flex flex-col gap-4 h-full">
       <h2 className="text-xl text-signal-green">Settings</h2>
 
-      <div className="panel">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg text-signal-green">Notification Channels</h3>
-          <div className="flex gap-2">
-            <button
-              className="px-2 py-1 border border-signal-green text-signal-green text-xs"
-              onClick={() => setEditing(blankForm('webhook'))}
-            >
-              + WEBHOOK
-            </button>
-            <button
-              className="px-2 py-1 border border-signal-green text-signal-green text-xs"
-              onClick={() => setEditing(blankForm('smtp'))}
-            >
-              + SMTP
-            </button>
+      <div className="flex gap-0 border-b border-border-color">
+        {tabs.filter(t => !t.adminOnly || isAdmin).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-xs tracking-wider border-b-2 transition-colors ${
+              tab === t.id
+                ? 'border-signal-green text-signal-green'
+                : 'border-transparent text-text-muted hover:text-text-main'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'channels' && (
+        <div className="panel">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg text-signal-green">Notification Channels</h3>
+            <div className="flex gap-2">
+              <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('webhook'))}>+ WEBHOOK</button>
+              <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('smtp'))}>+ SMTP</button>
+            </div>
           </div>
-        </div>
 
-        {error && <div className="text-signal-red mb-2 text-sm">{error}</div>}
-        {testResult && <div className="text-signal-amber mb-2 text-sm">{testResult}</div>}
+          {error && <div className="text-signal-red mb-2 text-sm">{error}</div>}
+          {testResult && <div className="text-signal-amber mb-2 text-sm">{testResult}</div>}
 
-        {channels.length === 0 ? (
-          <p className="text-text-muted text-sm">No notification channels configured.</p>
-        ) : (
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border-color text-text-muted">
-                <th className="p-2">Name</th>
-                <th className="p-2">Type</th>
-                <th className="p-2">Enabled</th>
-                <th className="p-2">Target</th>
-                <th className="p-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {channels.map(c => (
-                <tr key={c.id} className="border-b border-border-color">
-                  <td className="p-2 text-text-main">{c.name}</td>
-                  <td className="p-2 text-text-muted uppercase text-xs">{c.channel_type}</td>
-                  <td className="p-2">
-                    <span className={c.enabled ? 'text-signal-green' : 'text-text-muted'}>
-                      {c.enabled ? 'YES' : 'NO'}
-                    </span>
-                  </td>
-                  <td className="p-2 text-text-muted">
-                    {c.channel_type === 'webhook' ? c.config?.url : c.config?.host}
-                  </td>
-                  <td className="p-2">
-                    <div className="flex gap-1">
+          {channels.length === 0 ? (
+            <p className="text-text-muted text-sm">No notification channels configured.</p>
+          ) : (
+            <table className="w-full text-left border-collapse text-sm">
+              <thead><tr className="border-b border-border-color text-text-muted">
+                <th className="p-2">Name</th><th className="p-2">Type</th><th className="p-2">Enabled</th><th className="p-2">Target</th><th className="p-2">Actions</th>
+              </tr></thead>
+              <tbody>
+                {channels.map(c => (
+                  <tr key={c.id} className="border-b border-border-color">
+                    <td className="p-2 text-text-main">{c.name}</td>
+                    <td className="p-2 text-text-muted uppercase text-xs">{c.channel_type}</td>
+                    <td className="p-2"><span className={c.enabled ? 'text-signal-green' : 'text-text-muted'}>{c.enabled ? 'YES' : 'NO'}</span></td>
+                    <td className="p-2 text-text-muted">{c.channel_type === 'webhook' ? c.config?.url : c.config?.host}</td>
+                    <td className="p-2"><div className="flex gap-1">
                       <button className="text-xs px-2 border border-border-color text-text-muted hover:text-signal-green" onClick={() => setEditing(channelToForm(c))}>EDIT</button>
                       <button className="text-xs px-2 border border-border-color text-text-muted" onClick={() => onToggle(c)}>{c.enabled ? 'DISABLE' : 'ENABLE'}</button>
                       <button className="text-xs px-2 border border-signal-amber text-signal-amber" onClick={() => onTest(c.id)}>TEST</button>
                       <button className="text-xs px-2 border border-signal-red text-signal-red" onClick={() => onDelete(c.id)}>DEL</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
-      {editing && (
-        <ChannelForm
-          form={editing}
-          onChange={setEditing}
-          onCancel={() => setEditing(null)}
-          onSave={onSave}
-        />
+          {editing && (
+            <div className="mt-4">
+              <ChannelForm form={editing} onChange={setEditing} onCancel={() => setEditing(null)} onSave={onSave} />
+            </div>
+          )}
+        </div>
       )}
+
+      {tab === 'users' && isAdmin && <div className="panel"><UsersTab /></div>}
+      {tab === 'tokens' && isAdmin && <div className="panel"><ApiTokensTab /></div>}
+      {tab === 'audit' && isAdmin && <div className="panel"><AuditLogTab /></div>}
     </div>
   );
 }

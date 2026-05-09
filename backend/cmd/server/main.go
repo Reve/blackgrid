@@ -24,7 +24,12 @@ func main() {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization},
+		AllowCredentials: true, // required for session cookies cross-origin
+	}))
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -38,6 +43,11 @@ func main() {
 	defer pool.Close()
 
 	queries := db.New(pool)
+
+	// ---- Services ----
+	auditSvc := service.NewAuditService(queries)
+	authCfg := service.AuthConfigFromEnv()
+	authSvc := service.NewAuthService(queries, authCfg, auditSvc)
 
 	siteSvc := service.NewSiteService(queries)
 	vlanSvc := service.NewVlanService(queries)
@@ -72,97 +82,131 @@ func main() {
 	statusPageSvc := service.NewStatusPageService(queries)
 	statusPageHandler := handlers.NewStatusPageHandler(statusPageSvc)
 
-	v1 := e.Group("/api/v1")
+	authHandler := handlers.NewAuthHandler(authSvc, auditSvc, authCfg)
 
-	v1.GET("/health", h.Health)
+	// ---- Auth middleware ----
+	authMW := handlers.AuthMiddleware(authSvc)
+	adminMW := handlers.RequireAdmin()
+	operatorMW := handlers.RequireOperator()
 
-	// Sites
-	v1.GET("/sites", h.GetSites)
-	v1.GET("/sites/:id", h.GetSite)
-	v1.POST("/sites", h.CreateSite)
-	v1.PUT("/sites/:id", h.UpdateSite)
-	v1.DELETE("/sites/:id", h.DeleteSite)
-
-	// Vlans
-	v1.GET("/vlans", h.GetVlans)
-	v1.GET("/vlans/:id", h.GetVlan)
-	v1.POST("/vlans", h.CreateVlan)
-	v1.PUT("/vlans/:id", h.UpdateVlan)
-	v1.DELETE("/vlans/:id", h.DeleteVlan)
-
-	// Prefixes
-	v1.GET("/prefixes", h.GetPrefixes)
-	v1.GET("/prefixes/:id", h.GetPrefix)
-	v1.GET("/prefixes/:id/next-ip", h.GetNextAvailableIP)
-	v1.POST("/prefixes", h.CreatePrefix)
-	v1.PUT("/prefixes/:id", h.UpdatePrefix)
-	v1.PUT("/prefixes/:id/scan-config", h.UpdatePrefixScanConfig)
-	v1.DELETE("/prefixes/:id", h.DeletePrefix)
-
-	// IP Addresses
-	v1.GET("/ip-addresses", h.GetIPAddresses)
-	v1.GET("/ip-addresses/:id", h.GetIPAddress)
-	v1.POST("/ip-addresses", h.CreateIPAddress)
-	v1.PUT("/ip-addresses/:id", h.UpdateIPAddress)
-	v1.DELETE("/ip-addresses/:id", h.DeleteIPAddress)
-
-	// Devices
-	v1.GET("/devices", h.GetDevices)
-	v1.GET("/devices/:id", h.GetDevice)
-	v1.POST("/devices", h.CreateDevice)
-	v1.PUT("/devices/:id", h.UpdateDevice)
-	v1.DELETE("/devices/:id", h.DeleteDevice)
-
-	// Discovery
-	v1.GET("/discovery/scans", h.GetScans)
-	v1.POST("/discovery/scans", h.StartScan)
-	v1.GET("/discovery/scans/:id", h.GetScan)
-	v1.GET("/discovery/results", h.GetDiscoveryResults)
-	v1.POST("/discovery/results/:id/accept", h.AcceptDiscoveryResult)
-	v1.POST("/discovery/results/:id/ignore", h.IgnoreDiscoveryResult)
-	v1.POST("/prefixes/:id/scan", h.StartPrefixScan)
-
-	// Monitors
-	v1.GET("/monitors", monitorHandler.GetMonitors)
-	v1.GET("/monitors/:id", monitorHandler.GetMonitor)
-	v1.POST("/monitors", monitorHandler.CreateMonitor)
-	v1.PATCH("/monitors/:id", monitorHandler.UpdateMonitor)
-	v1.DELETE("/monitors/:id", monitorHandler.DeleteMonitor)
-	v1.POST("/monitors/:id/pause", monitorHandler.PauseMonitor)
-	v1.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor)
-	v1.POST("/monitors/:id/test", monitorHandler.TestMonitor)
-	v1.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
-
-	// Incidents
-	v1.GET("/incidents", incidentHandler.ListIncidents)
-	v1.GET("/incidents/counts", incidentHandler.IncidentCounts)
-	v1.GET("/incidents/:id", incidentHandler.GetIncident)
-	v1.POST("/incidents/:id/acknowledge", incidentHandler.AcknowledgeIncident)
-	v1.POST("/incidents/:id/resolve", incidentHandler.ResolveIncident)
-
-	// Notification channels
-	v1.GET("/notification-channels", notificationHandler.ListChannels)
-	v1.POST("/notification-channels", notificationHandler.CreateChannel)
-	v1.GET("/notification-channels/:id", notificationHandler.GetChannel)
-	v1.PATCH("/notification-channels/:id", notificationHandler.UpdateChannel)
-	v1.DELETE("/notification-channels/:id", notificationHandler.DeleteChannel)
-	v1.POST("/notification-channels/:id/test", notificationHandler.TestChannel)
-
-	// Status pages (admin)
-	v1.GET("/status-pages", statusPageHandler.ListStatusPages)
-	v1.POST("/status-pages", statusPageHandler.CreateStatusPage)
-	v1.GET("/status-pages/:id", statusPageHandler.GetStatusPage)
-	v1.PATCH("/status-pages/:id", statusPageHandler.UpdateStatusPage)
-	v1.DELETE("/status-pages/:id", statusPageHandler.DeleteStatusPage)
-	v1.POST("/status-pages/:id/monitors", statusPageHandler.AttachMonitor)
-	v1.PATCH("/status-pages/:id/monitors/:monitor_id", statusPageHandler.UpdateAttachedMonitor)
-	v1.DELETE("/status-pages/:id/monitors/:monitor_id", statusPageHandler.RemoveAttachedMonitor)
-	v1.POST("/status-pages/:id/monitors/reorder", statusPageHandler.ReorderMonitors)
-
-	// Public status endpoint (outside /api/v1)
+	// ---- Public status endpoint (no auth required) ----
 	e.GET("/status/:slug", statusPageHandler.PublicStatusPage)
 
-	// Graceful shutdown
+	// ---- API v1 group ----
+	v1 := e.Group("/api/v1")
+
+	// Public routes (no auth required)
+	v1.GET("/health", h.Health)
+	v1.GET("/setup/status", authHandler.SetupStatus)
+	v1.POST("/setup/admin", authHandler.SetupAdmin)
+	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/auth/logout", authHandler.Logout)
+
+	// Protected routes — require authentication
+	api := v1.Group("", authMW)
+
+	// Current user
+	api.GET("/auth/me", authHandler.Me)
+
+	// Sites — viewer can GET, operator+ can mutate
+	api.GET("/sites", h.GetSites)
+	api.GET("/sites/:id", h.GetSite)
+	api.POST("/sites", h.CreateSite, operatorMW)
+	api.PUT("/sites/:id", h.UpdateSite, operatorMW)
+	api.DELETE("/sites/:id", h.DeleteSite, operatorMW)
+
+	// Vlans
+	api.GET("/vlans", h.GetVlans)
+	api.GET("/vlans/:id", h.GetVlan)
+	api.POST("/vlans", h.CreateVlan, operatorMW)
+	api.PUT("/vlans/:id", h.UpdateVlan, operatorMW)
+	api.DELETE("/vlans/:id", h.DeleteVlan, operatorMW)
+
+	// Prefixes
+	api.GET("/prefixes", h.GetPrefixes)
+	api.GET("/prefixes/:id", h.GetPrefix)
+	api.GET("/prefixes/:id/next-ip", h.GetNextAvailableIP)
+	api.POST("/prefixes", h.CreatePrefix, operatorMW)
+	api.PUT("/prefixes/:id", h.UpdatePrefix, operatorMW)
+	api.PUT("/prefixes/:id/scan-config", h.UpdatePrefixScanConfig, operatorMW)
+	api.DELETE("/prefixes/:id", h.DeletePrefix, operatorMW)
+	api.POST("/prefixes/:id/scan", h.StartPrefixScan, operatorMW)
+
+	// IP Addresses
+	api.GET("/ip-addresses", h.GetIPAddresses)
+	api.GET("/ip-addresses/:id", h.GetIPAddress)
+	api.POST("/ip-addresses", h.CreateIPAddress, operatorMW)
+	api.PUT("/ip-addresses/:id", h.UpdateIPAddress, operatorMW)
+	api.DELETE("/ip-addresses/:id", h.DeleteIPAddress, operatorMW)
+
+	// Devices
+	api.GET("/devices", h.GetDevices)
+	api.GET("/devices/:id", h.GetDevice)
+	api.POST("/devices", h.CreateDevice, operatorMW)
+	api.PUT("/devices/:id", h.UpdateDevice, operatorMW)
+	api.DELETE("/devices/:id", h.DeleteDevice, operatorMW)
+
+	// Discovery
+	api.GET("/discovery/scans", h.GetScans)
+	api.POST("/discovery/scans", h.StartScan, operatorMW)
+	api.GET("/discovery/scans/:id", h.GetScan)
+	api.GET("/discovery/results", h.GetDiscoveryResults)
+	api.POST("/discovery/results/:id/accept", h.AcceptDiscoveryResult, operatorMW)
+	api.POST("/discovery/results/:id/ignore", h.IgnoreDiscoveryResult, operatorMW)
+
+	// Monitors
+	api.GET("/monitors", monitorHandler.GetMonitors)
+	api.GET("/monitors/:id", monitorHandler.GetMonitor)
+	api.POST("/monitors", monitorHandler.CreateMonitor, operatorMW)
+	api.PATCH("/monitors/:id", monitorHandler.UpdateMonitor, operatorMW)
+	api.DELETE("/monitors/:id", monitorHandler.DeleteMonitor, operatorMW)
+	api.POST("/monitors/:id/pause", monitorHandler.PauseMonitor, operatorMW)
+	api.POST("/monitors/:id/resume", monitorHandler.ResumeMonitor, operatorMW)
+	api.POST("/monitors/:id/test", monitorHandler.TestMonitor, operatorMW)
+	api.GET("/monitors/:id/results", monitorHandler.GetMonitorResults)
+
+	// Incidents
+	api.GET("/incidents", incidentHandler.ListIncidents)
+	api.GET("/incidents/counts", incidentHandler.IncidentCounts)
+	api.GET("/incidents/:id", incidentHandler.GetIncident)
+	api.POST("/incidents/:id/acknowledge", incidentHandler.AcknowledgeIncident, operatorMW)
+	api.POST("/incidents/:id/resolve", incidentHandler.ResolveIncident, operatorMW)
+
+	// Notification channels — admin only for mutation
+	api.GET("/notification-channels", notificationHandler.ListChannels)
+	api.POST("/notification-channels", notificationHandler.CreateChannel, adminMW)
+	api.GET("/notification-channels/:id", notificationHandler.GetChannel)
+	api.PATCH("/notification-channels/:id", notificationHandler.UpdateChannel, adminMW)
+	api.DELETE("/notification-channels/:id", notificationHandler.DeleteChannel, adminMW)
+	api.POST("/notification-channels/:id/test", notificationHandler.TestChannel, adminMW)
+
+	// Status pages (admin)
+	api.GET("/status-pages", statusPageHandler.ListStatusPages)
+	api.POST("/status-pages", statusPageHandler.CreateStatusPage, operatorMW)
+	api.GET("/status-pages/:id", statusPageHandler.GetStatusPage)
+	api.PATCH("/status-pages/:id", statusPageHandler.UpdateStatusPage, operatorMW)
+	api.DELETE("/status-pages/:id", statusPageHandler.DeleteStatusPage, operatorMW)
+	api.POST("/status-pages/:id/monitors", statusPageHandler.AttachMonitor, operatorMW)
+	api.PATCH("/status-pages/:id/monitors/:monitor_id", statusPageHandler.UpdateAttachedMonitor, operatorMW)
+	api.DELETE("/status-pages/:id/monitors/:monitor_id", statusPageHandler.RemoveAttachedMonitor, operatorMW)
+	api.POST("/status-pages/:id/monitors/reorder", statusPageHandler.ReorderMonitors, operatorMW)
+
+	// Users — admin only
+	api.GET("/users", authHandler.ListUsers, adminMW)
+	api.POST("/users", authHandler.CreateUser, adminMW)
+	api.GET("/users/:id", authHandler.GetUser, adminMW)
+	api.PATCH("/users/:id", authHandler.UpdateUser, adminMW)
+	api.DELETE("/users/:id", authHandler.DeleteUser, adminMW)
+
+	// API tokens — admin only
+	api.GET("/api-tokens", authHandler.ListAPITokens, adminMW)
+	api.POST("/api-tokens", authHandler.CreateAPIToken, adminMW)
+	api.DELETE("/api-tokens/:id", authHandler.DeleteAPIToken, adminMW)
+
+	// Audit log — admin only
+	api.GET("/audit-log", authHandler.ListAuditLog, adminMW)
+
+	// ---- Server start ----
 	go func() {
 		if err := e.Start(":8080"); err != nil && err != http.ErrServerClosed {
 			e.Logger.Fatal("shutting down the server")
