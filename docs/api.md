@@ -228,3 +228,89 @@ Sends a test payload immediately and stores a delivery row. Returns:
 ```json
 { "status": "sent" | "failed", "event_type": "test", "error": "...", "sent_at": "..." }
 ```
+
+# Status pages
+
+## `GET /api/v1/status-pages`
+Returns all configured status pages.
+
+## `POST /api/v1/status-pages`
+Creates a status page. Slug is generated from name when omitted.
+```json
+{
+  "name": "Homelab Core Services",
+  "slug": "homelab-core",
+  "description": "Core internal services",
+  "public": false,
+  "show_uptime": true,
+  "show_incidents": true
+}
+```
+- `400` — invalid slug or missing name
+- `409` — slug already in use
+
+## `GET /api/v1/status-pages/{id}`
+Returns admin metadata plus attached monitors with their full monitor objects.
+
+## `PATCH /api/v1/status-pages/{id}`
+Partial update. Any combination of `name`, `slug`, `description`, `public`, `show_uptime`, `show_incidents`.
+
+## `DELETE /api/v1/status-pages/{id}`
+Cascade-removes attached monitor links. Returns `204`.
+
+## `POST /api/v1/status-pages/{id}/monitors`
+Attaches a monitor to a status page.
+```json
+{ "monitor_id": "...", "display_name": "PostgreSQL", "display_order": 10 }
+```
+If `display_order` is omitted, the next available order (max + 10) is used.
+- `409` — monitor already attached
+
+## `PATCH /api/v1/status-pages/{id}/monitors/{monitor_id}`
+Updates display name and/or order for an attached monitor.
+
+## `DELETE /api/v1/status-pages/{id}/monitors/{monitor_id}`
+Detaches a monitor from a status page.
+
+## `POST /api/v1/status-pages/{id}/monitors/reorder`
+Reorders attached monitors. Each ID must currently be attached or the entire request is rejected.
+```json
+{ "monitor_ids": ["id1", "id2", "id3"] }
+```
+Sets `display_order` to 10, 20, 30, ... in the order given.
+
+# Public status endpoint
+
+## `GET /status/{slug}`
+Public-safe page representation. Returns `404` if the page does not exist OR is private (existence is not leaked).
+
+```json
+{
+  "name": "...",
+  "slug": "...",
+  "description": "...",
+  "aggregate_status": "up" | "degraded" | "down" | "empty",
+  "monitors": [
+    {
+      "display_name": "...",
+      "monitor_type": "http",
+      "status": "up",
+      "last_checked_at": "...",
+      "uptime_24h": 99.84,
+      "uptime_30d": 99.51
+    }
+  ],
+  "incidents": [
+    {
+      "monitor_display_name": "...",
+      "severity": "critical",
+      "status": "resolved",
+      "started_at": "...",
+      "resolved_at": "...",
+      "summary": "..."
+    }
+  ]
+}
+```
+
+The public response **never** includes monitor config, IP/device metadata, notification channels, raw check details, internal notes, or other private information.

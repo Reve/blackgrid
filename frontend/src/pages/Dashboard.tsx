@@ -1,26 +1,29 @@
 import { useEffect, useState } from 'react';
-import type { Incident, IncidentCounts, Monitor } from '../api/client';
-import { getIncidentCounts, getMonitors, listIncidents } from '../api/client';
+import type { Incident, IncidentCounts, Monitor, StatusPage } from '../api/client';
+import { getIncidentCounts, getMonitors, listIncidents, listStatusPages } from '../api/client';
 
 export default function Dashboard() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [counts, setCounts] = useState<IncidentCounts | null>(null);
   const [activeIncidents, setActiveIncidents] = useState<Incident[]>([]);
   const [recentResolved, setRecentResolved] = useState<Incident[]>([]);
+  const [statusPages, setStatusPages] = useState<StatusPage[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     try {
-      const [m, c, active, resolved] = await Promise.all([
+      const [m, c, active, resolved, sp] = await Promise.all([
         getMonitors(),
         getIncidentCounts(),
         listIncidents({ status: 'open', limit: 10 }),
         listIncidents({ status: 'resolved', limit: 10 }),
+        listStatusPages(),
       ]);
       setMonitors(m.data ?? []);
       setCounts(c.data);
       setActiveIncidents(active.data ?? []);
       setRecentResolved(resolved.data ?? []);
+      setStatusPages(sp.data ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -54,11 +57,41 @@ export default function Dashboard() {
         <Card label="Resolved 24h" value={counts?.resolved_24h_count ?? 0} accent="text-signal-green" />
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card label="Monitors Up" value={upCount} accent="text-signal-green" />
         <Card label="Monitors Down" value={downCount} accent="text-signal-red" />
         <Card label="Paused" value={pausedCount} accent="text-text-muted" />
         <Card label="Total Monitors" value={monitors.length} accent="text-text-main" />
+        <Card label="Status Pages" value={statusPages.length} accent="text-signal-green" />
+      </div>
+
+      <div className="panel">
+        <h3 className="text-lg text-signal-green mb-3">Public Status Pages</h3>
+        {statusPages.filter(p => p.public).length === 0 ? (
+          <p className="text-text-muted text-sm">No public status pages configured.</p>
+        ) : (
+          <table className="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border-color text-text-muted">
+                <th className="p-2">Name</th>
+                <th className="p-2">Slug</th>
+                <th className="p-2">Public link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statusPages.filter(p => p.public).map(p => (
+                <tr key={p.id} className="border-b border-border-color">
+                  <td className="p-2 text-text-main">{p.name}</td>
+                  <td className="p-2 text-text-muted font-mono text-xs">{p.slug}</td>
+                  <td className="p-2 text-xs">
+                    <a href={`/status/${p.slug}`} target="_blank" rel="noreferrer"
+                       className="text-signal-green hover:underline">/status/{p.slug}</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">

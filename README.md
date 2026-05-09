@@ -83,3 +83,21 @@ incident and emits `incident.resolved`.
 Notification secrets (SMTP passwords, webhook bearer tokens) are stored as
 JSONB in PostgreSQL **without an additional encryption layer** in this phase
 — protect the database accordingly.
+
+## Status pages
+
+Phase 5 adds **status pages**: group selected monitors into an internal or
+public-facing health overview with aggregate status, per-service uptime, and
+recent incidents. Public pages are served at:
+
+```
+GET /status/{slug}
+```
+
+Pages with `public=false` return `404` at the public route (existence is not
+leaked). The public response strictly excludes monitor config, IPAM/device
+metadata, notification channels, raw check details, and internal notes.
+
+See [docs/status-pages.md](docs/status-pages.md) for the data model, safe
+exposure rules, aggregate-status logic, and uptime calculation; the admin
+and public endpoint reference is in [docs/api.md](docs/api.md).

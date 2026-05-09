@@ -7,6 +7,8 @@ import Monitors from './pages/Monitors';
 import Incidents from './pages/Incidents';
 import Discovery from './pages/Discovery';
 import Settings from './pages/Settings';
+import StatusPages from './pages/StatusPages';
+import PublicStatusPage from './pages/PublicStatusPage';
 
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -18,6 +20,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     { path: '/monitors', label: 'MONITORS' },
     { path: '/incidents', label: 'INCIDENTS' },
     { path: '/discovery', label: 'DISCOVERY' },
+    { path: '/status-pages', label: 'STATUS PAGES' },
     { path: '/settings', label: 'SETTINGS' },
   ];
 
@@ -60,20 +63,31 @@ function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AdminApp() {
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/ipam" element={<IPAM />} />
+        <Route path="/devices" element={<Devices />} />
+        <Route path="/monitors" element={<Monitors />} />
+        <Route path="/incidents" element={<Incidents />} />
+        <Route path="/discovery" element={<Discovery />} />
+        <Route path="/status-pages" element={<StatusPages />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Layout>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/ipam" element={<IPAM />} />
-          <Route path="/devices" element={<Devices />} />
-          <Route path="/monitors" element={<Monitors />} />
-          <Route path="/incidents" element={<Incidents />} />
-          <Route path="/discovery" element={<Discovery />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* Public status pages render without the admin chrome. */}
+        <Route path="/status/:slug" element={<PublicStatusPage />} />
+        <Route path="*" element={<AdminApp />} />
+      </Routes>
     </BrowserRouter>
   );
 }

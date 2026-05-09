@@ -206,3 +206,96 @@ export const testNotificationChannel = (id: string) =>
   api.post<{ status: string; event_type: string; error?: string; sent_at?: string }>(
     `/notification-channels/${id}/test`,
   );
+
+// Status pages
+export interface StatusPage {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  public: boolean;
+  show_uptime: boolean;
+  show_incidents: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AttachedMonitor {
+  monitor: Monitor;
+  display_name: string | null;
+  display_order: number;
+  created_at: string | null;
+}
+
+export interface AdminStatusPage {
+  page: StatusPage;
+  monitors: AttachedMonitor[];
+}
+
+export interface CreateStatusPageInput {
+  name: string;
+  slug?: string;
+  description?: string | null;
+  public?: boolean;
+  show_uptime?: boolean;
+  show_incidents?: boolean;
+}
+
+export interface AttachStatusPageMonitorInput {
+  monitor_id: string;
+  display_name?: string;
+  display_order?: number;
+}
+
+export type AggregateStatus = 'up' | 'degraded' | 'down' | 'empty';
+
+export interface PublicStatusMonitor {
+  display_name: string;
+  monitor_type: string;
+  status: string;
+  last_checked_at: string | null;
+  uptime_24h: number | null;
+  uptime_30d: number | null;
+}
+
+export interface PublicIncident {
+  monitor_display_name: string;
+  severity: string;
+  status: string;
+  started_at: string | null;
+  resolved_at: string | null;
+  summary: string;
+}
+
+export interface PublicStatusPageResponse {
+  name: string;
+  slug: string;
+  description: string;
+  aggregate_status: AggregateStatus;
+  monitors: PublicStatusMonitor[];
+  incidents?: PublicIncident[];
+}
+
+export const listStatusPages = () => api.get<StatusPage[]>('/status-pages');
+export const getStatusPage = (id: string) => api.get<AdminStatusPage>(`/status-pages/${id}`);
+export const createStatusPage = (data: CreateStatusPageInput) =>
+  api.post<StatusPage>('/status-pages', data);
+export const updateStatusPage = (id: string, data: Partial<CreateStatusPageInput>) =>
+  api.patch<StatusPage>(`/status-pages/${id}`, data);
+export const deleteStatusPage = (id: string) => api.delete(`/status-pages/${id}`);
+export const attachStatusPageMonitor = (id: string, data: AttachStatusPageMonitorInput) =>
+  api.post<AttachedMonitor>(`/status-pages/${id}/monitors`, data);
+export const updateAttachedStatusPageMonitor = (
+  id: string,
+  monitorId: string,
+  data: { display_name?: string; display_order?: number },
+) => api.patch<AttachedMonitor>(`/status-pages/${id}/monitors/${monitorId}`, data);
+export const removeAttachedStatusPageMonitor = (id: string, monitorId: string) =>
+  api.delete(`/status-pages/${id}/monitors/${monitorId}`);
+export const reorderStatusPageMonitors = (id: string, monitorIds: string[]) =>
+  api.post(`/status-pages/${id}/monitors/reorder`, { monitor_ids: monitorIds });
+
+// Public status page is at the root, not under /api/v1.
+const publicAxios = axios.create({ baseURL: 'http://localhost:8080' });
+export const getPublicStatusPage = (slug: string) =>
+  publicAxios.get<PublicStatusPageResponse>(`/status/${slug}`);

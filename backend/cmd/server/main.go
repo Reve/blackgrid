@@ -69,6 +69,9 @@ func main() {
 	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
 	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
 
+	statusPageSvc := service.NewStatusPageService(queries)
+	statusPageHandler := handlers.NewStatusPageHandler(statusPageSvc)
+
 	v1 := e.Group("/api/v1")
 
 	v1.GET("/health", h.Health)
@@ -144,6 +147,20 @@ func main() {
 	v1.PATCH("/notification-channels/:id", notificationHandler.UpdateChannel)
 	v1.DELETE("/notification-channels/:id", notificationHandler.DeleteChannel)
 	v1.POST("/notification-channels/:id/test", notificationHandler.TestChannel)
+
+	// Status pages (admin)
+	v1.GET("/status-pages", statusPageHandler.ListStatusPages)
+	v1.POST("/status-pages", statusPageHandler.CreateStatusPage)
+	v1.GET("/status-pages/:id", statusPageHandler.GetStatusPage)
+	v1.PATCH("/status-pages/:id", statusPageHandler.UpdateStatusPage)
+	v1.DELETE("/status-pages/:id", statusPageHandler.DeleteStatusPage)
+	v1.POST("/status-pages/:id/monitors", statusPageHandler.AttachMonitor)
+	v1.PATCH("/status-pages/:id/monitors/:monitor_id", statusPageHandler.UpdateAttachedMonitor)
+	v1.DELETE("/status-pages/:id/monitors/:monitor_id", statusPageHandler.RemoveAttachedMonitor)
+	v1.POST("/status-pages/:id/monitors/reorder", statusPageHandler.ReorderMonitors)
+
+	// Public status endpoint (outside /api/v1)
+	e.GET("/status/:slug", statusPageHandler.PublicStatusPage)
 
 	// Graceful shutdown
 	go func() {
