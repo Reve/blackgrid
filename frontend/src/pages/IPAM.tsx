@@ -10,8 +10,10 @@ import {
 } from '../api/client';
 import { Loading, ErrorState } from '../components/UI';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function IPAM() {
+  const { isOperator } = useAuth();
   const [prefixes, setPrefixes] = useState<Prefix[]>([]);
   const [ips, setIps] = useState<IPAddress[]>([]);
   const [scansByPrefix, setScansByPrefix] = useState<Record<string, DiscoveryScan>>({});
@@ -125,6 +127,7 @@ export default function IPAM() {
                           <input
                             type="checkbox"
                             checked={!!p.scan_enabled}
+                            disabled={!isOperator}
                             onChange={() => handleToggleScanEnabled(p)}
                           />
                           <span className={p.scan_enabled ? 'text-signal-green' : 'text-text-muted'}>
@@ -137,11 +140,12 @@ export default function IPAM() {
                           type="number"
                           min={60}
                           defaultValue={p.scan_interval_seconds || 3600}
+                          disabled={!isOperator}
                           onBlur={(e) => {
                             const v = Number(e.target.value);
                             if (v !== p.scan_interval_seconds) handleIntervalChange(p, v);
                           }}
-                          className="w-24 bg-surface border border-surface text-text-main px-2 py-1 rounded"
+                          className="w-24 bg-surface border border-surface text-text-main px-2 py-1 rounded disabled:opacity-50"
                         />
                       </td>
                       <td className="p-2 text-text-muted">
@@ -169,13 +173,17 @@ export default function IPAM() {
                         )}
                       </td>
                       <td className="p-2">
-                        <button
-                          onClick={() => handleScanNow(p.id)}
-                          disabled={busy === p.id}
-                          className="text-signal-green hover:underline disabled:opacity-50"
-                        >
-                          {busy === p.id ? 'starting…' : 'scan now'}
-                        </button>
+                        {isOperator ? (
+                          <button
+                            onClick={() => handleScanNow(p.id)}
+                            disabled={busy === p.id}
+                            className="text-signal-green hover:underline disabled:opacity-50"
+                          >
+                            {busy === p.id ? 'starting…' : 'scan now'}
+                          </button>
+                        ) : (
+                          <span className="text-text-muted text-xs">read-only</span>
+                        )}
                       </td>
                     </tr>
                   );

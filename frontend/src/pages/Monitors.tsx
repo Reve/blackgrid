@@ -4,6 +4,7 @@ import { getMonitors, createMonitor, updateMonitor, deleteMonitor, pauseMonitor,
 import { useEvents } from '../context/EventContext';
 import { Loading, ErrorState, ConfirmDialog } from '../components/UI';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Monitors() {
   const [monitors, setMonitors] = useState<Monitor[]>([]);
@@ -13,6 +14,7 @@ export default function Monitors() {
   const [error, setError] = useState<ApiErrorDetail | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { subscribe } = useEvents();
+  const { isOperator } = useAuth();
   const { success, error: toastError } = useToast();
 
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -204,7 +206,7 @@ export default function Monitors() {
       <div className="flex-1 panel flex flex-col">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl text-signal-green">Monitors</h2>
-          <button className="btn" onClick={openCreateForm}>Add Monitor</button>
+          {isOperator && <button className="btn" onClick={openCreateForm}>Add Monitor</button>}
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -232,12 +234,14 @@ export default function Monitors() {
                   <td className="p-2 text-text-muted">{m.monitor_type === 'push' ? 'Passive' : m.target}</td>
                   <td className="p-2 text-text-muted">{m.interval_seconds}s</td>
                   <td className="p-2 flex gap-2">
-                    {m.monitor_type !== 'push' && (
+                    {isOperator && m.monitor_type !== 'push' && (
                         <button className="btn text-xs" onClick={(e) => { e.stopPropagation(); handleTest(m); }}>Test</button>
                     )}
-                    <button className="btn text-xs" onClick={(e) => { e.stopPropagation(); handleTogglePause(m); }}>
-                      {m.status === 'paused' ? 'Resume' : 'Pause'}
-                    </button>
+                    {isOperator && (
+                      <button className="btn text-xs" onClick={(e) => { e.stopPropagation(); handleTogglePause(m); }}>
+                        {m.status === 'paused' ? 'Resume' : 'Pause'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -403,8 +407,8 @@ export default function Monitors() {
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg text-signal-green">{selectedMonitor.name}</h3>
             <div className="flex gap-2">
-              <button className="text-text-muted hover:text-text-main text-sm" onClick={() => openEditForm(selectedMonitor)}>Edit</button>
-              <button className="text-signal-red hover:text-red-400 text-sm" onClick={() => setConfirmDelete(selectedMonitor.id)}>Delete</button>
+              {isOperator && <button className="text-text-muted hover:text-text-main text-sm" onClick={() => openEditForm(selectedMonitor)}>Edit</button>}
+              {isOperator && <button className="text-signal-red hover:text-red-400 text-sm" onClick={() => setConfirmDelete(selectedMonitor.id)}>Delete</button>}
               <button className="text-text-muted hover:text-text-main" onClick={() => setSelectedMonitor(null)}>✕</button>
             </div>
           </div>
@@ -430,7 +434,7 @@ export default function Monitors() {
                         <span className="text-text-muted">Grace Period</span>
                         <span className="text-text-main">{selectedMonitor.config?.grace_seconds || 120}s</span>
                     </div>
-                    <button className="btn text-[10px] w-full" onClick={() => setConfirmRotate(selectedMonitor.id)}>Rotate Push Token</button>
+                    {isOperator && <button className="btn text-[10px] w-full" onClick={() => setConfirmRotate(selectedMonitor.id)}>Rotate Push Token</button>}
                     {generatedToken && (
                         <div className="mt-2 p-2 bg-black border border-signal-green text-[10px] font-mono break-all select-all">
                             {generatedToken.url}

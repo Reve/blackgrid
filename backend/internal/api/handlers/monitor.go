@@ -308,6 +308,23 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 		})
 	}
 
+	if h.AuditService != nil {
+		h.AuditService.Log(ctx, service.AuditParams{
+			Action:     "monitor.create",
+			EntityType: "monitor",
+			EntityID:   m.ID,
+			After: map[string]any{
+				"name":             m.Name,
+				"slug":             m.Slug,
+				"monitor_type":     m.MonitorType,
+				"target":           m.Target,
+				"interval_seconds": m.IntervalSeconds,
+				"enabled":          m.Enabled,
+				"config":           json.RawMessage(monitor.MaskConfig(m.Config)),
+			},
+		})
+	}
+
 	resp := createMonitorResponse{
 		monitorResponse:    toMonitorResponse(m),
 		GeneratedPushToken: plainToken,
@@ -417,6 +434,27 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 		})
 	}
 
+	if h.AuditService != nil {
+		h.AuditService.Log(ctx, service.AuditParams{
+			Action:     "monitor.update",
+			EntityType: "monitor",
+			EntityID:   updated.ID,
+			Before: map[string]any{
+				"name":             m.Name,
+				"target":           m.Target,
+				"interval_seconds": m.IntervalSeconds,
+				"enabled":          m.Enabled,
+			},
+			After: map[string]any{
+				"name":             updated.Name,
+				"target":           updated.Target,
+				"interval_seconds": updated.IntervalSeconds,
+				"enabled":          updated.Enabled,
+				"config":           json.RawMessage(monitor.MaskConfig(updated.Config)),
+			},
+		})
+	}
+
 	return c.JSON(http.StatusOK, toMonitorResponse(updated))
 }
 
@@ -495,6 +533,14 @@ func (h *MonitorHandler) DeleteMonitor(c echo.Context) error {
 		})
 	}
 
+	if h.AuditService != nil {
+		h.AuditService.Log(ctx, service.AuditParams{
+			Action:     "monitor.delete",
+			EntityType: "monitor",
+			EntityID:   uuid,
+		})
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -504,6 +550,14 @@ func (h *MonitorHandler) PauseMonitor(c echo.Context) error {
 
 func (h *MonitorHandler) ResumeMonitor(c echo.Context) error {
 	return h.setStatus(c, "unknown", true)
+}
+
+// auditAction returns the audit action name for a setStatus transition.
+func auditActionForStatus(status string) string {
+	if status == "paused" {
+		return "monitor.pause"
+	}
+	return "monitor.resume"
 }
 
 func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) error {
@@ -561,6 +615,16 @@ func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) 
 		})
 	}
 
+	if h.AuditService != nil {
+		h.AuditService.Log(ctx, service.AuditParams{
+			Action:     auditActionForStatus(status),
+			EntityType: "monitor",
+			EntityID:   updated.ID,
+			Before:     map[string]any{"status": m.Status, "enabled": m.Enabled},
+			After:      map[string]any{"status": status, "enabled": enabled, "name": updated.Name},
+		})
+	}
+
 	return c.JSON(http.StatusOK, toMonitorResponse(updated))
 }
 
@@ -608,6 +672,42 @@ func (h *MonitorHandler) TestMonitor(c echo.Context) error {
 		LastStatusChangeAt: m.LastStatusChangeAt,
 		PushTokenHash:      m.PushTokenHash,
 	})
+
+	// Publish realtime events so the dashboard updates without manual
+	// refresh. We deliberately do NOT route through the incident hook
+	// here: a manual test must never open an incident.
+	if h.bus != nil {
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorTested,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(m.ID),
+			Payload: map[string]any{
+				"status":     result.Status,
+				"latency_ms": result.LatencyMs,
+				"name":       m.Name,
+			},
+		})
+		h.bus.Publish(ctx, events.Event{
+			Type:       events.MonitorResultCreated,
+			ObjectType: "monitor",
+			ObjectID:   events.FormatUUID(m.ID),
+			Payload: map[string]any{
+				"status":     result.Status,
+				"latency_ms": result.LatencyMs,
+				"name":       m.Name,
+				"source":     "manual_test",
+			},
+		})
+	}
+
+	if h.AuditService != nil {
+		h.AuditService.Log(ctx, service.AuditParams{
+			Action:     "monitor.test",
+			EntityType: "monitor",
+			EntityID:   m.ID,
+			After:      map[string]any{"name": m.Name, "result_status": result.Status},
+		})
+	}
 
 	return c.JSON(http.StatusOK, result)
 }
@@ -813,7 +913,7 @@ func (h *MonitorHandler) RotatePushToken(c echo.Context) error {
 	}
 
 	h.AuditService.Log(ctx, service.AuditParams{
-		Action:     "rotate_token",
+		Action:     "monitor.push_token.rotate",
 		EntityType: "monitor",
 		EntityID:   m.ID,
 		After:      map[string]any{"monitor_name": m.Name},

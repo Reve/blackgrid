@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"blackgrid/internal/metrics"
@@ -36,6 +37,9 @@ func (b *EventBus) Publish(ctx context.Context, event Event) {
 
 	if event.ID == "" {
 		event.ID = uuid.New().String()
+	}
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
 	}
 
 	metrics.EventBusEventsTotal.WithLabelValues(string(event.Type)).Inc()

@@ -173,16 +173,19 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (db.Use
 		return db.User{}, "", ErrUserDisabled
 	}
 
-	rawToken := make([]byte, sessionRawBytes)
-	if _, err := rand.Read(rawToken); err != nil {
+	rawBytes := make([]byte, sessionRawBytes)
+	if _, err := rand.Read(rawBytes); err != nil {
 		return db.User{}, "", fmt.Errorf("generate session: %w", err)
 	}
-	sessionHash := base64.URLEncoding.EncodeToString(rawToken)
+	// Plaintext token goes to the cookie. Only its SHA-256 hash is stored
+	// at rest, so a database leak does not expose live session credentials.
+	plaintextToken := base64.URLEncoding.EncodeToString(rawBytes)
+	storedHash := sha256HexToken(plaintextToken)
 
 	expiresAt := time.Now().Add(time.Duration(s.config.SessionTTLHours) * time.Hour)
 	_, err = s.q.CreateSession(ctx, db.CreateSessionParams{
 		UserID:      user.ID,
-		SessionHash: sessionHash,
+		SessionHash: storedHash,
 		ExpiresAt:   pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
@@ -201,12 +204,13 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (db.Use
 			ActorUserID: user.ID,
 		})
 	}
-	return user, sessionHash, nil
+	return user, plaintextToken, nil
 }
 
-// Logout deletes the session by hash.
-func (s *AuthService) Logout(ctx context.Context, sessionHash string) error {
-	sess, err := s.q.GetSessionByHash(ctx, sessionHash)
+// Logout deletes the session matching the plaintext token. The token is
+// hashed before lookup; we never compare plaintext against the at-rest hash.
+func (s *AuthService) Logout(ctx context.Context, plaintextToken string) error {
+	sess, err := s.q.GetSessionByHash(ctx, sha256HexToken(plaintextToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // already gone — idempotent
@@ -231,9 +235,11 @@ func (s *AuthService) Logout(ctx context.Context, sessionHash string) error {
 	return nil
 }
 
-// ResolveSession validates a session cookie hash and returns the user.
-func (s *AuthService) ResolveSession(ctx context.Context, hash string) (db.User, db.Session, error) {
-	sess, err := s.q.GetSessionByHash(ctx, hash)
+// ResolveSession validates a session cookie's plaintext token and returns
+// the user. The plaintext is hashed with SHA-256 before lookup; only the
+// hash is stored in sessions.session_hash.
+func (s *AuthService) ResolveSession(ctx context.Context, plaintextToken string) (db.User, db.Session, error) {
+	sess, err := s.q.GetSessionByHash(ctx, sha256HexToken(plaintextToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.User{}, db.Session{}, ErrSessionNotFound

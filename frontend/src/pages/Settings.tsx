@@ -190,10 +190,12 @@ export default function Settings() {
         <div className="panel">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg text-signal-green">Notification Channels</h3>
-            <div className="flex gap-2">
-              <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('webhook'))}>+ WEBHOOK</button>
-              <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('smtp'))}>+ SMTP</button>
-            </div>
+            {isAdmin && (
+              <div className="flex gap-2">
+                <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('webhook'))}>+ WEBHOOK</button>
+                <button className="px-2 py-1 border border-signal-green text-signal-green text-xs" onClick={() => setEditing(blankForm('smtp'))}>+ SMTP</button>
+              </div>
+            )}
           </div>
 
           {error && <div className="text-signal-red mb-2 text-sm">{error}</div>}
@@ -214,10 +216,16 @@ export default function Settings() {
                     <td className="p-2"><span className={c.enabled ? 'text-signal-green' : 'text-text-muted'}>{c.enabled ? 'YES' : 'NO'}</span></td>
                     <td className="p-2 text-text-muted">{c.channel_type === 'webhook' ? c.config?.url : c.config?.host}</td>
                     <td className="p-2"><div className="flex gap-1">
-                      <button className="text-xs px-2 border border-border-color text-text-muted hover:text-signal-green" onClick={() => setEditing(channelToForm(c))}>EDIT</button>
-                      <button className="text-xs px-2 border border-border-color text-text-muted" onClick={() => onToggle(c)}>{c.enabled ? 'DISABLE' : 'ENABLE'}</button>
-                      <button className="text-xs px-2 border border-signal-amber text-signal-amber" onClick={() => onTest(c.id)}>TEST</button>
-                      <button className="text-xs px-2 border border-signal-red text-signal-red" onClick={() => onDelete(c.id)}>DEL</button>
+                      {isAdmin ? (
+                        <>
+                          <button className="text-xs px-2 border border-border-color text-text-muted hover:text-signal-green" onClick={() => setEditing(channelToForm(c))}>EDIT</button>
+                          <button className="text-xs px-2 border border-border-color text-text-muted" onClick={() => onToggle(c)}>{c.enabled ? 'DISABLE' : 'ENABLE'}</button>
+                          <button className="text-xs px-2 border border-signal-amber text-signal-amber" onClick={() => onTest(c.id)}>TEST</button>
+                          <button className="text-xs px-2 border border-signal-red text-signal-red" onClick={() => onDelete(c.id)}>DEL</button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-text-muted">read-only</span>
+                      )}
                     </div></td>
                   </tr>
                 ))}

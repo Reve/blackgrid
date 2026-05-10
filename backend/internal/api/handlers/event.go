@@ -74,7 +74,10 @@ func (h *EventHandler) StreamEvents(c echo.Context) error {
 				continue
 			}
 
-			if _, err := fmt.Fprintf(w, "id: %s\ndata: %s\n\n", event.ID, string(data)); err != nil {
+			// Full SSE format: id, event, data. Browsers' EventSource
+			// dispatches frames whose `event:` field matches an
+			// addEventListener("monitor.status_changed", ...) call.
+			if _, err := fmt.Fprintf(w, "id: %s\nevent: %s\ndata: %s\n\n", event.ID, event.Type, string(data)); err != nil {
 				return nil
 			}
 			c.Response().Flush()

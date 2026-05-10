@@ -19,9 +19,10 @@ Metrics are exposed at `/metrics` in Prometheus format. Key metrics include:
 ## Database Maintenance
 
 ### Backup
-A backup script is provided in `deploy/scripts/backup-postgres.sh`. It creates a timestamped compressed SQL dump.
+A backup script is provided in `deploy/scripts/backup-postgres.sh`. It writes a timestamped file in pg_dump's **custom format** (suffix `.dump`), produced by `pg_dump -Fc`. The custom format is compressed by default and is the input format `pg_restore` expects.
 ```bash
 ./deploy/scripts/backup-postgres.sh
+# → ./backups/blackgrid_<timestamp>.dump
 ```
 It is recommended to run this via cron:
 ```cron
@@ -29,10 +30,15 @@ It is recommended to run this via cron:
 ```
 
 ### Restore
-To restore a backup, use `deploy/scripts/restore-postgres.sh`. **WARNING: This will overwrite the existing database.**
+To restore a backup, use `deploy/scripts/restore-postgres.sh`. **WARNING: This will drop and recreate objects in the target database.** The argument must be the `.dump` file produced by `backup-postgres.sh` (custom format) — not a `.sql` or `.sql.gz` file.
 ```bash
-./deploy/scripts/restore-postgres.sh /path/to/backup.sql.gz
+./deploy/scripts/restore-postgres.sh ./backups/blackgrid_20250510_020000.dump
 ```
+Under the hood the script runs:
+```bash
+pg_restore -d "$DATABASE_URL" --clean --if-exists --no-owner "$BACKUP_FILE"
+```
+If you need a plain-text dump for grep/inspection, run `pg_restore --file=- <backup>.dump` to convert; do not feed plain SQL into `restore-postgres.sh`.
 
 ### Data Retention
 Blackgrid automatically cleans up historical data based on environment variable settings. The cleanup job runs periodically in the background. You can manually trigger a cleanup via the API (admin only):

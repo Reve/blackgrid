@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"blackgrid/internal/db"
+	"blackgrid/internal/service"
+
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
 )
@@ -39,6 +41,12 @@ func (h *Handlers) CreatePrefix(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+	if h.AuditService != nil {
+		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+			Action: "ipam.prefix.create", EntityType: "prefix", EntityID: prefix.ID,
+			After: map[string]any{"prefix": prefix.Prefix},
+		})
+	}
 	return c.JSON(http.StatusCreated, prefix)
 }
 
@@ -58,6 +66,12 @@ func (h *Handlers) UpdatePrefix(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+	if h.AuditService != nil {
+		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+			Action: "ipam.prefix.update", EntityType: "prefix", EntityID: prefix.ID,
+			After: map[string]any{"prefix": prefix.Prefix},
+		})
+	}
 	return c.JSON(http.StatusOK, prefix)
 }
 
@@ -69,6 +83,11 @@ func (h *Handlers) DeletePrefix(c echo.Context) error {
 
 	if err := h.PrefixService.DeletePrefix(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if h.AuditService != nil {
+		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+			Action: "ipam.prefix.delete", EntityType: "prefix", EntityID: id,
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

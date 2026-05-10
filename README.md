@@ -68,6 +68,23 @@ Contributions are welcome! Please see the contribution guidelines (coming soon) 
 
 MIT
 
+## Build prerequisites
+
+- **Backend**: Go 1.25 or newer. The Docker image pins `golang:1.25-alpine`; `go.mod` declares the minimum patch the current `pgx/v5` and `goose` releases need. Newer 1.25.x patches and 1.26.x work unchanged.
+- **Frontend**: Node 20 LTS or newer, npm 10+. The repository ships with `package-lock.json`; see [frontend/README.md](frontend/README.md) for the supported install command.
+
+A clean checkout builds with:
+
+```bash
+# backend
+cd backend && go build ./...
+
+# frontend
+cd frontend && npm install && npm run build
+```
+
+For the manual end-to-end check after a deploy, follow [docs/smoke-test.md](docs/smoke-test.md).
+
 ## API conformance notes
 
 The HTTP API uses a single error envelope and a documented IPAM surface. See [docs/api.md](docs/api.md) for the full reference and the list of intentional deviations from the original phased plan (notably: device interfaces are not modelled as standalone resources; `next-ip` is exposed alongside `next-available` as a compatibility alias).

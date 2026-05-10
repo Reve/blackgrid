@@ -46,11 +46,22 @@ func main() {
 	}
 	origins := strings.Split(allowedOrigins, ",")
 
+	// Default true so the dev frontend on localhost:5173 can carry the
+	// session cookie. Operators deploying to production with a wildcard
+	// origin must set CORS_ALLOW_CREDENTIALS=false (the browser will
+	// reject "*" + credentials anyway). See docs/deployment.md.
+	allowCreds := getEnvBool("CORS_ALLOW_CREDENTIALS", true)
+	for _, o := range origins {
+		if strings.TrimSpace(o) == "*" && allowCreds {
+			log.Printf("WARNING: CORS_ALLOWED_ORIGINS contains '*' and CORS_ALLOW_CREDENTIALS=true; browsers will reject this combination. Set explicit origins or disable credentials.")
+		}
+	}
+
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAuthorization, echo.HeaderXRequestID},
-		AllowCredentials: true,
+		AllowCredentials: allowCreds,
 	}))
 
 	dbURL := os.Getenv("DATABASE_URL")
@@ -70,8 +81,16 @@ func main() {
 		log.Fatalf("Unable to parse DATABASE_URL: %v\n", err)
 	}
 
+	// pgxpool models pool capacity differently from database/sql:
+	//   - MaxConns       caps total open connections (DB_MAX_OPEN_CONNS).
+	//   - MaxConnLifetime caps a connection's age (DB_CONN_MAX_LIFETIME_MINUTES).
+	//   - MaxConnIdleTime caps how long an idle connection lingers
+	//     before being closed (DB_CONN_MAX_IDLE_TIME_MINUTES).
+	// pgxpool has no direct equivalent of database/sql's "max idle
+	// connections" cap — DB_MAX_IDLE_CONNS is therefore unused. The
+	// previous assignment of an integer to MaxConnIdleTime (a Duration)
+	// silently set it to nanoseconds; that bug is fixed here.
 	config.MaxConns = int32(getEnvInt("DB_MAX_OPEN_CONNS", 25))
-	config.MaxConnIdleTime = time.Duration(getEnvInt("DB_MAX_IDLE_CONNS", 10))
 	config.MaxConnLifetime = time.Duration(getEnvInt("DB_CONN_MAX_LIFETIME_MINUTES", 30)) * time.Minute
 	config.MaxConnIdleTime = time.Duration(getEnvInt("DB_CONN_MAX_IDLE_TIME_MINUTES", 10)) * time.Minute
 
@@ -124,7 +143,7 @@ func main() {
 	incidentSvc.SetNotifier(notificationSvc)
 
 	monitorRunner := monitor.NewRunner(queries)
-	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10, bus)
+	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, getEnvInt("MONITOR_WORKERS", 10), bus)
 	incidentHook := service.NewIncidentHook(incidentSvc)
 	monitorScheduler.SetIncidentHook(incidentHook)
 	monitorScheduler.Start()
@@ -133,9 +152,11 @@ func main() {
 	monitorHandler.SetIncidentHook(incidentHook)
 	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
 	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
+	notificationHandler.SetAuditService(auditSvc)
 
 	statusPageSvc := service.NewStatusPageService(queries, bus)
 	statusPageHandler := handlers.NewStatusPageHandler(statusPageSvc)
+	statusPageHandler.SetAuditService(auditSvc)
 
 	eventHandler := handlers.NewEventHandler(bus)
 
@@ -342,8 +363,25 @@ func main() {
 	if err := e.Shutdown(ctx); err != nil {
 		e.Logger.Fatal(err)
 	}
+
+	// Close SSE subscribers cleanly so any blocked Publish callers return
+	// and clients see EOF instead of a hung connection.
+	bus.Shutdown()
 	
 	log.Println("Blackgrid exited cleanly")
+}
+
+func getEnvBool(key string, def bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "":
+		return def
+	case "1", "t", "true", "yes", "on":
+		return true
+	case "0", "f", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
 }
 
 func getEnvInt(key string, def int) int {

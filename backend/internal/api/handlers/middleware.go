@@ -37,10 +37,9 @@ func StructuredLogger(logger *slog.Logger) echo.MiddlewareFunc {
 			metrics.HttpRequestsTotal.WithLabelValues(req.Method, path, strconv.Itoa(status)).Inc()
 			metrics.HttpRequestDuration.WithLabelValues(req.Method, path).Observe(latency.Seconds())
 
-			user, _ := c.Get("user").(*db.User)
 			userID := ""
-			if user != nil {
-				userID = uuidStr(user.ID)
+			if u, ok := c.Get(ctxKeyUser).(db.User); ok {
+				userID = uuidStr(u.ID)
 			}
 
 			requestID := res.Header().Get(echo.HeaderXRequestID)
@@ -153,11 +152,13 @@ func UserRateLimitMiddleware(r rate.Limit, b int, code string, message string) e
 	limiter := NewUserRateLimiter(r, b)
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			user, _ := c.Get("user").(*db.User)
-			if user == nil {
+			u, ok := c.Get(ctxKeyUser).(db.User)
+			if !ok {
+				// Unauthenticated requests bypass per-user limits; the
+				// surrounding RateLimitMiddleware (per-IP) still applies.
 				return next(c)
 			}
-			userID := uuidStr(user.ID)
+			userID := uuidStr(u.ID)
 			if !limiter.GetLimiter(userID).Allow() {
 				return Error(c, ErrCodeRateLimited, message, nil)
 			}

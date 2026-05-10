@@ -153,7 +153,7 @@ func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
 	}
 
 	h.AuditService.Log(c.Request().Context(), service.AuditParams{
-		Action:     "accept_result",
+		Action:     "discovery.result_accept",
 		EntityType: "discovery_result",
 		EntityID:   id,
 		After:      map[string]any{"ip_address": ip.IpAddress},
@@ -171,6 +171,12 @@ func (h *Handlers) IgnoreDiscoveryResult(c echo.Context) error {
 	if err != nil {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
+
+	h.AuditService.Log(c.Request().Context(), service.AuditParams{
+		Action:     "discovery.result_ignore",
+		EntityType: "discovery_result",
+		EntityID:   id,
+	})
 
 	return c.JSON(http.StatusOK, res)
 }

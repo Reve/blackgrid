@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# Blackgrid Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite application for the Blackgrid IPAM/monitoring UI.
 
-Currently, two official plugins are available:
+## Package manager
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+This project uses **npm** exclusively. The `package-lock.json` is the
+authoritative lockfile and is checked in. Do not commit `pnpm-lock.yaml`,
+`yarn.lock`, or `bun.lockb` — multiple lockfiles drift apart and produce
+non-reproducible builds.
 
-## React Compiler
+The Docker image (`frontend/Dockerfile`) runs `npm install && npm run build`,
+so any contributor change must work with that exact toolchain.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Build from a clean checkout
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd frontend
+rm -rf node_modules dist
+npm install        # respects package-lock.json
+npm run build      # → dist/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+CI should run `npm ci` instead of `npm install` to fail loudly if the
+lockfile is out of date with `package.json`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Dev server
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+The dev server listens on `http://localhost:5173` and the backend's
+`CORS_ALLOWED_ORIGINS` default already allows that origin, with
+`CORS_ALLOW_CREDENTIALS=true` so the session cookie flows.
+
+## Type-check + lint
+
+```bash
+npm run lint
+npx tsc -b --noEmit   # type-only check
+```
+
+The Docker build (`npm run build`) runs `tsc -b && vite build`, so type
+errors block the production build.
+
+## Why not pnpm?
+
+Earlier iterations of this repo had both `package-lock.json` and
+`pnpm-lock.yaml` checked in. They drifted, and `npm install` silently
+picked up dependency versions that did not match `pnpm install` resolution.
+Pick one and stick with it; we picked npm because the deployment Dockerfile
+already uses it. If you switch package managers in the future, delete the
+old lockfile in the same commit.

@@ -13,11 +13,18 @@ import (
 )
 
 type NotificationHandler struct {
-	svc *service.NotificationService
+	svc   *service.NotificationService
+	audit *service.AuditService
 }
 
 func NewNotificationHandler(svc *service.NotificationService) *NotificationHandler {
 	return &NotificationHandler{svc: svc}
+}
+
+// SetAuditService wires the audit service. Channel mutations are written to
+// the audit log when this is set; otherwise they pass through silently.
+func (h *NotificationHandler) SetAuditService(a *service.AuditService) {
+	h.audit = a
 }
 
 type channelResponse struct {
@@ -121,6 +128,21 @@ func (h *NotificationHandler) CreateChannel(c echo.Context) error {
 	if err != nil {
 		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
+	if h.audit != nil {
+		// MaskedConfig() strips sensitive fields like passwords/tokens
+		// before they enter the audit trail.
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action:     "notification_channel.create",
+			EntityType: "notification_channel",
+			EntityID:   ch.ID,
+			After: map[string]any{
+				"name":         ch.Name,
+				"channel_type": ch.ChannelType,
+				"enabled":      ch.Enabled,
+				"config":       json.RawMessage(service.MaskConfig(ch)),
+			},
+		})
+	}
 	return c.JSON(http.StatusCreated, toChannelResponse(ch))
 }
 
@@ -164,6 +186,15 @@ func (h *NotificationHandler) UpdateChannel(c echo.Context) error {
 	if err != nil {
 		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
+	if h.audit != nil {
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action:     "notification_channel.update",
+			EntityType: "notification_channel",
+			EntityID:   ch.ID,
+			Before:     map[string]any{"name": existing.Name, "enabled": existing.Enabled, "config": json.RawMessage(service.MaskConfig(existing))},
+			After:      map[string]any{"name": ch.Name, "enabled": ch.Enabled, "config": json.RawMessage(service.MaskConfig(ch))},
+		})
+	}
 	return c.JSON(http.StatusOK, toChannelResponse(ch))
 }
 
@@ -174,6 +205,13 @@ func (h *NotificationHandler) DeleteChannel(c echo.Context) error {
 	}
 	if err := h.svc.DeleteChannel(c.Request().Context(), id); err != nil {
 		return Error(c, ErrCodeInternal, "internal error", nil)
+	}
+	if h.audit != nil {
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action:     "notification_channel.delete",
+			EntityType: "notification_channel",
+			EntityID:   id,
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

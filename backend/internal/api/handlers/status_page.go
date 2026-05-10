@@ -11,11 +11,18 @@ import (
 )
 
 type StatusPageHandler struct {
-	svc *service.StatusPageService
+	svc   *service.StatusPageService
+	audit *service.AuditService
 }
 
 func NewStatusPageHandler(svc *service.StatusPageService) *StatusPageHandler {
 	return &StatusPageHandler{svc: svc}
+}
+
+// SetAuditService wires the audit service. Status page mutations are written
+// to the audit log when this is set; reads are not audited.
+func (h *StatusPageHandler) SetAuditService(a *service.AuditService) {
+	h.audit = a
 }
 
 type statusPageRequest struct {
@@ -60,6 +67,14 @@ func (h *StatusPageHandler) CreateStatusPage(c echo.Context) error {
 	if err != nil {
 		return statusPageError(c, err)
 	}
+	if h.audit != nil {
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action:     "status_page.create",
+			EntityType: "status_page",
+			EntityID:   page.ID,
+			After:      map[string]any{"name": page.Name, "slug": page.Slug, "public": page.Public},
+		})
+	}
 	return c.JSON(http.StatusCreated, page)
 }
 
@@ -88,6 +103,14 @@ func (h *StatusPageHandler) UpdateStatusPage(c echo.Context) error {
 	if err != nil {
 		return statusPageError(c, err)
 	}
+	if h.audit != nil {
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action:     "status_page.update",
+			EntityType: "status_page",
+			EntityID:   page.ID,
+			After:      map[string]any{"name": page.Name, "slug": page.Slug, "public": page.Public},
+		})
+	}
 	return c.JSON(http.StatusOK, page)
 }
 
@@ -98,6 +121,11 @@ func (h *StatusPageHandler) DeleteStatusPage(c echo.Context) error {
 	}
 	if err := h.svc.DeleteStatusPage(c.Request().Context(), id); err != nil {
 		return statusPageError(c, err)
+	}
+	if h.audit != nil {
+		h.audit.Log(c.Request().Context(), service.AuditParams{
+			Action: "status_page.delete", EntityType: "status_page", EntityID: id,
+		})
 	}
 	return c.NoContent(http.StatusNoContent)
 }
