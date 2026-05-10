@@ -229,6 +229,7 @@ export interface DiscoveryResultsFilters {
   prefix_id?: string;
   classification?: DiscoveryClassification;
   ignored?: boolean;
+  ports?: string;
   limit?: number;
   offset?: number;
 }

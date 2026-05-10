@@ -285,13 +285,25 @@ func (q *Queries) GetRunningOrQueuedScansForPrefix(ctx context.Context, prefixID
 }
 
 const listDiscoveryResults = `-- name: ListDiscoveryResults :many
-SELECT id, scan_id, prefix_id, address, mac_address, hostname, reverse_dns, open_ports, latency_ms, classification, seen_at, raw, ignored, accepted_at, created_ip_address_id, created_at, updated_at FROM discovery_results
-WHERE ($1::uuid IS NULL OR scan_id = $1)
-AND ($2::uuid IS NULL OR prefix_id = $2)
-AND ($3::text IS NULL OR classification = $3)
-AND ($4::boolean IS NULL OR ignored = $4)
+SELECT id, scan_id, prefix_id, address, mac_address, hostname, reverse_dns, open_ports, latency_ms, classification, seen_at, raw, ignored, accepted_at, created_ip_address_id, created_at, updated_at FROM (
+    SELECT DISTINCT ON (prefix_id, address) id, scan_id, prefix_id, address, mac_address, hostname, reverse_dns, open_ports, latency_ms, classification, seen_at, raw, ignored, accepted_at, created_ip_address_id, created_at, updated_at
+    FROM discovery_results
+    WHERE ($1::uuid IS NULL OR scan_id = $1)
+    AND ($2::uuid IS NULL OR prefix_id = $2)
+    AND ($3::text = '' OR classification = $3)
+    AND ($4::boolean IS NULL OR ignored = $4)
+    AND (
+        cardinality($5::int[]) = 0
+        OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(open_ports) AS port(value)
+            WHERE port.value::int = ANY($5::int[])
+        )
+    )
+    ORDER BY prefix_id, address, seen_at DESC, created_at DESC
+) latest
 ORDER BY seen_at DESC
-LIMIT $6 OFFSET $5
+LIMIT $7 OFFSET $6
 `
 
 type ListDiscoveryResultsParams struct {
@@ -299,6 +311,7 @@ type ListDiscoveryResultsParams struct {
 	Column2 pgtype.UUID `json:"column_2"`
 	Column3 string      `json:"column_3"`
 	Column4 bool        `json:"column_4"`
+	Column5 []int32     `json:"column_5"`
 	Offset  int32       `json:"offset"`
 	Limit   int32       `json:"limit"`
 }
@@ -309,6 +322,7 @@ func (q *Queries) ListDiscoveryResults(ctx context.Context, arg ListDiscoveryRes
 		arg.Column2,
 		arg.Column3,
 		arg.Column4,
+		arg.Column5,
 		arg.Offset,
 		arg.Limit,
 	)
@@ -351,7 +365,7 @@ func (q *Queries) ListDiscoveryResults(ctx context.Context, arg ListDiscoveryRes
 const listDiscoveryScans = `-- name: ListDiscoveryScans :many
 SELECT id, prefix_id, status, started_at, completed_at, error, created_at, updated_at FROM discovery_scans
 WHERE ($1::uuid IS NULL OR prefix_id = $1)
-AND ($2::text IS NULL OR status = $2)
+AND ($2::text = '' OR status = $2)
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $3
 `

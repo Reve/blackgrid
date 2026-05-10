@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"blackgrid/internal/db"
 	"blackgrid/internal/service"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/labstack/echo/v4"
@@ -12,6 +15,119 @@ import (
 
 type scanReq struct {
 	PrefixID string `json:"prefix_id"`
+}
+
+type discoveryResultResponse struct {
+	ID                 string `json:"id"`
+	ScanID             string `json:"scan_id"`
+	PrefixID           string `json:"prefix_id"`
+	Address            string `json:"address"`
+	MacAddress         any    `json:"mac_address"`
+	Hostname           any    `json:"hostname"`
+	ReverseDNS         any    `json:"reverse_dns"`
+	OpenPorts          []int  `json:"open_ports"`
+	LatencyMs          any    `json:"latency_ms"`
+	Classification     string `json:"classification"`
+	SeenAt             any    `json:"seen_at"`
+	Ignored            bool   `json:"ignored"`
+	AcceptedAt         any    `json:"accepted_at"`
+	CreatedIPAddressID any    `json:"created_ip_address_id"`
+	CreatedAt          any    `json:"created_at"`
+	UpdatedAt          any    `json:"updated_at"`
+}
+
+func discoveryResultToResponse(r db.DiscoveryResult) discoveryResultResponse {
+	return discoveryResultResponse{
+		ID:                 uuidStr(r.ID),
+		ScanID:             uuidStr(r.ScanID),
+		PrefixID:           uuidStr(r.PrefixID),
+		Address:            r.Address.String(),
+		MacAddress:         bytesStringOrNil(r.MacAddress),
+		Hostname:           textOrNil(r.Hostname),
+		ReverseDNS:         textOrNil(r.ReverseDns),
+		OpenPorts:          openPortsOrEmpty(r.OpenPorts),
+		LatencyMs:          int4OrNil(r.LatencyMs),
+		Classification:     r.Classification,
+		SeenAt:             timeOrNilTZ(r.SeenAt),
+		Ignored:            r.Ignored,
+		AcceptedAt:         timeOrNilTZ(r.AcceptedAt),
+		CreatedIPAddressID: uuidOrNil(r.CreatedIpAddressID),
+		CreatedAt:          timeOrNilTZ(r.CreatedAt),
+		UpdatedAt:          timeOrNilTZ(r.UpdatedAt),
+	}
+}
+
+func discoveryResultsToResponse(results []db.DiscoveryResult) []discoveryResultResponse {
+	out := make([]discoveryResultResponse, 0, len(results))
+	for _, r := range results {
+		out = append(out, discoveryResultToResponse(r))
+	}
+	return out
+}
+
+func openPortsOrEmpty(raw []byte) []int {
+	if len(raw) == 0 {
+		return []int{}
+	}
+	var ports []int
+	if err := json.Unmarshal(raw, &ports); err != nil {
+		return []int{}
+	}
+	return ports
+}
+
+func textOrNil(t pgtype.Text) any {
+	if !t.Valid {
+		return nil
+	}
+	return t.String
+}
+
+func int4OrNil(i pgtype.Int4) any {
+	if !i.Valid {
+		return nil
+	}
+	return i.Int32
+}
+
+func uuidOrNil(id pgtype.UUID) any {
+	if !id.Valid {
+		return nil
+	}
+	return uuidStr(id)
+}
+
+func bytesStringOrNil(b []byte) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return string(b)
+}
+
+func parsePortsFilter(raw string) ([]int32, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []int32{}, nil
+	}
+	seen := make(map[int32]bool)
+	ports := make([]int32, 0, 4)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		port, err := strconv.ParseInt(part, 10, 32)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, errors.New("ports must be comma-separated numbers between 1 and 65535")
+		}
+		p := int32(port)
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		ports = append(ports, p)
+	}
+	return ports, nil
 }
 
 func (h *Handlers) StartScan(c echo.Context) error {
@@ -124,7 +240,12 @@ func (h *Handlers) GetDiscoveryResults(c echo.Context) error {
 	limit := getQueryInt32(c, "limit", 100)
 	offset := getQueryInt32(c, "offset", 0)
 
-	results, err := h.DiscoveryService.ListResults(c.Request().Context(), scanID, prefixID, classification, ignored, limit, offset)
+	ports, err := parsePortsFilter(c.QueryParam("ports"))
+	if err != nil {
+		return Error(c, ErrCodeValidation, err.Error(), nil)
+	}
+
+	results, err := h.DiscoveryService.ListResults(c.Request().Context(), scanID, prefixID, classification, ignored, ports, limit, offset)
 	if err != nil {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
@@ -133,7 +254,7 @@ func (h *Handlers) GetDiscoveryResults(c echo.Context) error {
 		return c.JSON(http.StatusOK, []interface{}{})
 	}
 
-	return c.JSON(http.StatusOK, results)
+	return c.JSON(http.StatusOK, discoveryResultsToResponse(results))
 }
 
 func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
@@ -178,7 +299,7 @@ func (h *Handlers) IgnoreDiscoveryResult(c echo.Context) error {
 		EntityID:   id,
 	})
 
-	return c.JSON(http.StatusOK, res)
+	return c.JSON(http.StatusOK, discoveryResultToResponse(res))
 }
 
 func getQueryInt32(c echo.Context, key string, fallback int32) int32 {

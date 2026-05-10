@@ -19,7 +19,7 @@ SELECT * FROM discovery_scans WHERE id = $1 LIMIT 1;
 -- name: ListDiscoveryScans :many
 SELECT * FROM discovery_scans
 WHERE ($1::uuid IS NULL OR prefix_id = $1)
-AND ($2::text IS NULL OR status = $2)
+AND ($2::text = '' OR status = $2)
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $3;
 
@@ -35,13 +35,25 @@ RETURNING *;
 SELECT * FROM discovery_results WHERE id = $1 LIMIT 1;
 
 -- name: ListDiscoveryResults :many
-SELECT * FROM discovery_results
-WHERE ($1::uuid IS NULL OR scan_id = $1)
-AND ($2::uuid IS NULL OR prefix_id = $2)
-AND ($3::text IS NULL OR classification = $3)
-AND ($4::boolean IS NULL OR ignored = $4)
+SELECT * FROM (
+    SELECT DISTINCT ON (prefix_id, address) *
+    FROM discovery_results
+    WHERE ($1::uuid IS NULL OR scan_id = $1)
+    AND ($2::uuid IS NULL OR prefix_id = $2)
+    AND ($3::text = '' OR classification = $3)
+    AND ($4::boolean IS NULL OR ignored = $4)
+    AND (
+        cardinality($5::int[]) = 0
+        OR EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(open_ports) AS port(value)
+            WHERE port.value::int = ANY($5::int[])
+        )
+    )
+    ORDER BY prefix_id, address, seen_at DESC, created_at DESC
+) latest
 ORDER BY seen_at DESC
-LIMIT $6 OFFSET $5;
+LIMIT $7 OFFSET $6;
 
 -- name: UpdateDiscoveryResultAccepted :one
 UPDATE discovery_results

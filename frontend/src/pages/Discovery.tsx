@@ -43,6 +43,51 @@ function formatDuration(scan: DiscoveryScan): string {
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
 }
 
+function describeError(e: unknown, fallback: string): string {
+  if (!e) return fallback;
+  if (typeof e === 'string') return e;
+  if (typeof e === 'object') {
+    const err = e as {
+      message?: string;
+      response?: { data?: { error?: { message?: string } } };
+    };
+    return err.message || err.response?.data?.error?.message || fallback;
+  }
+  return fallback;
+}
+
+function mergeScans(current: DiscoveryScan[], incoming: DiscoveryScan[]) {
+  const byId = new Map<string, DiscoveryScan>();
+  for (const scan of current) byId.set(scan.id, scan);
+  for (const scan of incoming) byId.set(scan.id, scan);
+  return [...byId.values()]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 25);
+}
+
+function portsList(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value.filter((port): port is number => typeof port === 'number');
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((port): port is number => typeof port === 'number');
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function formatPorts(value: unknown, limit?: number): string {
+  const ports = portsList(value);
+  const visible = limit ? ports.slice(0, limit) : ports;
+  return visible.join(', ') || '-';
+}
+
 export default function Discovery() {
   const navigate = useNavigate();
   const [prefixes, setPrefixes] = useState<Prefix[]>([]);
@@ -52,7 +97,9 @@ export default function Discovery() {
   const [filterPrefix, setFilterPrefix] = useState<string>('');
   const [filterClass, setFilterClass] = useState<string>('');
   const [filterIgnored, setFilterIgnored] = useState<'all' | 'yes' | 'no'>('no');
+  const [filterPorts, setFilterPorts] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [scanStatus, setScanStatus] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [diagnostics, setDiagnostics] = useState<DiscoveryDiagnostics | null>(null);
@@ -71,21 +118,33 @@ export default function Discovery() {
         prefix_id: filterPrefix || undefined,
         classification: (filterClass as DiscoveryClassification) || undefined,
         ignored: filterIgnored === 'all' ? undefined : filterIgnored === 'yes',
+        ports: filterPorts.trim() || undefined,
         limit: 200,
       }),
     ]);
-    setPrefixes(prefixesRes.data || []);
-    setScans(scansRes.data || []);
-    setResults(resultsRes.data || []);
+    const nextPrefixes = prefixesRes.data || [];
+    const nextScans = scansRes.data || [];
+    const nextResults = resultsRes.data || [];
+
+    setPrefixes(nextPrefixes);
+    setScans((current) => mergeScans(current, nextScans));
+    setResults(nextResults);
+    return {
+      prefixes: nextPrefixes,
+      scans: nextScans,
+      results: nextResults,
+    };
   };
 
   useEffect(() => {
-    setLoading(true);
-    refresh()
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
+    const timeout = window.setTimeout(() => {
+      refresh()
+        .catch((e) => setError(String(e)))
+        .finally(() => setLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterPrefix, filterClass, filterIgnored]);
+  }, [filterPrefix, filterClass, filterIgnored, filterPorts]);
 
   useEffect(() => {
     getDiscoveryDiagnostics()
@@ -109,7 +168,7 @@ export default function Discovery() {
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterPrefix, filterClass, filterIgnored, subscribe]);
+  }, [filterPrefix, filterClass, filterIgnored, filterPorts, subscribe]);
 
   const prefixById = useMemo(() => {
     const m = new Map<string, Prefix>();
@@ -123,12 +182,24 @@ export default function Discovery() {
       return;
     }
     setError('');
+    setScanStatus('');
     setScanning(true);
     try {
-      await startDiscoveryScan(selectedPrefix);
-      await refresh();
-    } catch (e: any) {
-      setError(e?.response?.data?.error || e?.message || 'Failed to start scan');
+      const started = (await startDiscoveryScan(selectedPrefix)).data;
+      const prefixLabel = prefixById.get(selectedPrefix)?.prefix || selectedPrefix;
+      setScans((current) => [started, ...current.filter((s) => s.id !== started.id)]);
+      setScanStatus(`Scan queued for ${prefixLabel}.`);
+
+      const refreshed = await refresh();
+      const updated = refreshed.scans.find((s) => s.id === started.id) || started;
+      const loadedResults = refreshed.results.filter((r) => r.scan_id === started.id).length;
+      const suffix =
+        updated.status === 'completed'
+          ? ` ${loadedResults} result${loadedResults === 1 ? '' : 's'} loaded.`
+          : '';
+      setScanStatus(`Scan ${updated.status} for ${prefixLabel}.${suffix}`);
+    } catch (e: unknown) {
+      setError(describeError(e, 'Failed to start scan'));
     } finally {
       setScanning(false);
     }
@@ -139,8 +210,8 @@ export default function Discovery() {
     try {
       await acceptDiscoveryResult(r.id, {});
       await refresh();
-    } catch (e: any) {
-      setError(e?.response?.data?.error || 'Failed to accept');
+    } catch (e: unknown) {
+      setError(describeError(e, 'Failed to accept'));
     }
   };
 
@@ -149,13 +220,13 @@ export default function Discovery() {
     try {
       await ignoreDiscoveryResult(r.id);
       await refresh();
-    } catch (e: any) {
-      setError(e?.response?.data?.error || 'Failed to ignore');
+    } catch (e: unknown) {
+      setError(describeError(e, 'Failed to ignore'));
     }
   };
 
   const handleCreateMonitor = (r: DiscoveryResult) => {
-    const ports = r.open_ports || [];
+    const ports = portsList(r.open_ports);
     let monitor_type: 'http' | 'tcp' | 'dns' | 'tls' | 'postgres' = 'tcp';
     let target = r.address;
 
@@ -206,8 +277,8 @@ export default function Discovery() {
     try {
       const r = await probeDiscoveryHost({ address: probeAddr.trim(), ports });
       setProbeResult(r.data);
-    } catch (e: any) {
-      setProbeError(e?.message || 'Probe failed');
+    } catch (e: unknown) {
+      setProbeError(describeError(e, 'Probe failed'));
     } finally {
       setProbing(false);
     }
@@ -392,6 +463,9 @@ export default function Discovery() {
             {scanning ? 'STARTING…' : 'START SCAN'}
           </button>
           {error && <span className="text-signal-red text-sm">{error}</span>}
+          {scanStatus && !error && (
+            <span className="text-signal-green text-sm">{scanStatus}</span>
+          )}
         </div>
       </div>
 
@@ -505,6 +579,12 @@ export default function Discovery() {
             <option value="yes">ignored only</option>
             <option value="all">all</option>
           </select>
+          <input
+            value={filterPorts}
+            onChange={(e) => setFilterPorts(e.target.value)}
+            placeholder="ports: 22,80,443"
+            className="bg-surface border border-surface text-text-main px-3 py-2 rounded text-sm w-44"
+          />
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm font-mono">
@@ -532,7 +612,7 @@ export default function Discovery() {
                     <td className={`p-2 ${classificationStyle[r.classification]}`}>{classificationTag(r.classification)}</td>
                     <td className="p-2 text-signal-green">{r.address}</td>
                     <td className="p-2 text-text-muted">{r.reverse_dns || '-'}</td>
-                    <td className="p-2 text-text-muted">{(r.open_ports || []).join(', ') || '-'}</td>
+                    <td className="p-2 text-text-muted">{formatPorts(r.open_ports)}</td>
                     <td className="p-2 text-text-muted">{r.latency_ms ? `${r.latency_ms}ms` : '-'}</td>
                     <td className="p-2 text-text-muted">{new Date(r.seen_at).toLocaleString()}</td>
                     <td className="p-2 space-x-2">
@@ -573,7 +653,7 @@ export default function Discovery() {
                   <span>
                     <span className="text-signal-amber">[NEW]</span> {r.address}
                   </span>
-                  <span className="text-text-muted">{(r.open_ports || []).slice(0, 3).join(',')}</span>
+                  <span className="text-text-muted">{formatPorts(r.open_ports, 3)}</span>
                 </li>
               ))}
             </ul>

@@ -57,10 +57,10 @@ type DiscoveryService struct {
 	bus               *events.EventBus
 
 	// runtime stats — read by the diagnostics handler.
-	statsMu        sync.RWMutex
-	schedRunning   bool
-	schedLastTick  time.Time
-	runningScans   int
+	statsMu       sync.RWMutex
+	schedRunning  bool
+	schedLastTick time.Time
+	runningScans  int
 }
 
 // WorkerCount returns the configured worker pool size.
@@ -505,7 +505,7 @@ func (s *DiscoveryService) persistSeen(ctx context.Context, scanID, prefixID pgt
 			Payload: map[string]any{
 				"scan_id":        events.FormatUUID(scanID),
 				"prefix_id":      events.FormatUUID(prefixID),
-				"address":         addr,
+				"address":        addr,
 				"classification": classification,
 				"reverse_dns":    probe.ReverseDNS,
 			},
@@ -551,7 +551,7 @@ func (s *DiscoveryService) persistStale(ctx context.Context, scanID, prefixID pg
 			Payload: map[string]any{
 				"address":   ip.String(),
 				"prefix_id": events.FormatUUID(prefixID),
-				"scan_id":    events.FormatUUID(scanID),
+				"scan_id":   events.FormatUUID(scanID),
 			},
 		})
 	}
@@ -655,7 +655,7 @@ func (s *DiscoveryService) GetScan(ctx context.Context, id pgtype.UUID) (db.Disc
 	return s.q.GetDiscoveryScan(ctx, id)
 }
 
-func (s *DiscoveryService) ListResults(ctx context.Context, scanID, prefixID pgtype.UUID, classification string, ignored *bool, limit, offset int32) ([]db.DiscoveryResult, error) {
+func (s *DiscoveryService) ListResults(ctx context.Context, scanID, prefixID pgtype.UUID, classification string, ignored *bool, ports []int32, limit, offset int32) ([]db.DiscoveryResult, error) {
 	ignoredBool := false
 	if ignored != nil {
 		ignoredBool = *ignored
@@ -665,6 +665,7 @@ func (s *DiscoveryService) ListResults(ctx context.Context, scanID, prefixID pgt
 		Column2: prefixID,
 		Column3: classification,
 		Column4: ignoredBool,
+		Column5: ports,
 		Offset:  offset,
 		Limit:   limit,
 	})
