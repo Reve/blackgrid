@@ -2,11 +2,80 @@ package handlers
 
 import (
 	"fmt"
+	"net"
+	"net/netip"
 	"strconv"
 	"time"
 
+	"blackgrid/internal/service"
+
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/labstack/echo/v4"
 )
+
+// AuditFromContext builds the actor/request fields of an AuditParams from an
+// Echo context: actor user ID and type from the auth middleware, the request
+// ID stamped by the request-ID middleware, and the parsed remote IP. Callers
+// fill in Action / EntityType / EntityID / Before / After.
+func AuditFromContext(c echo.Context) service.AuditParams {
+	p := service.AuditParams{
+		RequestID: c.Response().Header().Get(echo.HeaderXRequestID),
+		ActorType: "system",
+	}
+	if u, ok := GetAuthUser(c); ok {
+		p.ActorUserID = u.ID
+		p.ActorType = "user"
+	}
+	if tokID, ok := c.Get(ctxKeyTokenID).(pgtype.UUID); ok && tokID.Valid {
+		p.ActorTokenID = tokID
+		p.ActorType = "api_token"
+	}
+	if ip := remoteIP(c); ip != nil {
+		p.IPAddress = ip
+	}
+	return p
+}
+
+// LogAudit merges the actor/request fields from the Echo context into p and
+// dispatches the audit entry. Use this from any handler that touches a
+// user-modifiable resource so we get a consistent actor trail.
+func LogAudit(audit *service.AuditService, c echo.Context, p service.AuditParams) {
+	if audit == nil {
+		return
+	}
+	base := AuditFromContext(c)
+	if !p.ActorUserID.Valid {
+		p.ActorUserID = base.ActorUserID
+	}
+	if !p.ActorTokenID.Valid {
+		p.ActorTokenID = base.ActorTokenID
+	}
+	if p.ActorType == "" {
+		p.ActorType = base.ActorType
+	}
+	if p.RequestID == "" {
+		p.RequestID = base.RequestID
+	}
+	if p.IPAddress == nil {
+		p.IPAddress = base.IPAddress
+	}
+	audit.Log(c.Request().Context(), p)
+}
+
+func remoteIP(c echo.Context) *netip.Addr {
+	host, _, err := net.SplitHostPort(c.Request().RemoteAddr)
+	if err != nil {
+		host = c.Request().RemoteAddr
+	}
+	if host == "" {
+		return nil
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return nil
+	}
+	return &addr
+}
 
 // parseUUID parses a UUID string into pgtype.UUID.
 func parseUUID(s string) (pgtype.UUID, error) {

@@ -70,18 +70,31 @@ MIT
 
 ## Build prerequisites
 
-- **Backend**: Go 1.25 or newer. The Docker image pins `golang:1.25-alpine`; `go.mod` declares the minimum patch the current `pgx/v5` and `goose` releases need. Newer 1.25.x patches and 1.26.x work unchanged.
+- **Backend**: Go 1.25.7 or newer. The Docker image pins `golang:1.25-alpine`; `go.mod` declares `go 1.25.7` as the minimum toolchain that compiles the current `pgx/v5` and `goose` releases. Newer 1.25.x patches and 1.26.x work unchanged. See [docs/deployment.md](docs/deployment.md) for the supported runtime matrix.
 - **Frontend**: Node 20 LTS or newer, npm 10+. The repository ships with `package-lock.json`; see [frontend/README.md](frontend/README.md) for the supported install command.
 
 A clean checkout builds with:
 
 ```bash
 # backend
-cd backend && go build ./...
+cd backend && go build ./... && go test ./...
 
 # frontend
-cd frontend && npm install && npm run build
+cd frontend && npm ci && npm run build
 ```
+
+The backend integration tests skip cleanly if Postgres is unreachable. To
+run them against a throwaway DB:
+
+```bash
+docker compose up -d db
+BLACKGRID_TEST_DATABASE_URL=postgres://blackgrid:blackgrid@localhost:5432/blackgrid_test?sslmode=disable \
+  go test -p 1 ./...
+```
+
+`-p 1` disables parallel package execution so the integration tests share
+the schema without stomping on each other. CI should run the same two
+commands; no other setup is required.
 
 For the manual end-to-end check after a deploy, follow [docs/smoke-test.md](docs/smoke-test.md).
 

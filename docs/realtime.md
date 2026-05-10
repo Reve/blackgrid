@@ -7,7 +7,7 @@ consume the same stream.
 ## Endpoint
 
 ```
-GET /api/v1/events
+GET /api/v1/events/stream
 ```
 
 The endpoint is served under the same `/api/v1` group as the rest of the
@@ -28,7 +28,7 @@ Both filters are optional. When both are supplied, an event must match
 Example:
 
 ```
-GET /api/v1/events?types=monitor.status_changed,incident.opened&object_types=monitor,incident
+GET /api/v1/events/stream?types=monitor.status_changed,incident.opened&object_types=monitor,incident
 ```
 
 ## Frame format

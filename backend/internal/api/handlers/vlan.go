@@ -11,7 +11,7 @@ import (
 func (h *Handlers) GetVlans(c echo.Context) error {
 	vlans, err := h.VlanService.GetVlans(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, vlans)
 }
@@ -37,7 +37,7 @@ func (h *Handlers) CreateVlan(c echo.Context) error {
 
 	vlan, err := h.VlanService.CreateVlan(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusCreated, vlan)
 }
@@ -56,7 +56,7 @@ func (h *Handlers) UpdateVlan(c echo.Context) error {
 
 	vlan, err := h.VlanService.UpdateVlan(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, vlan)
 }
@@ -68,7 +68,7 @@ func (h *Handlers) DeleteVlan(c echo.Context) error {
 	}
 
 	if err := h.VlanService.DeleteVlan(c.Request().Context(), id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.NoContent(http.StatusNoContent)
 }

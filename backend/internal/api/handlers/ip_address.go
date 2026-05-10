@@ -13,7 +13,7 @@ import (
 func (h *Handlers) GetIPAddresses(c echo.Context) error {
 	ips, err := h.IPAddressService.GetIPAddresses(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, ips)
 }
@@ -42,7 +42,7 @@ func (h *Handlers) CreateIPAddress(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	if h.AuditService != nil {
-		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action: "ipam.ip_address.create", EntityType: "ip_address", EntityID: ip.ID,
 			After: map[string]any{"ip_address": ip.IpAddress, "status": ip.Status},
 		})
@@ -67,7 +67,7 @@ func (h *Handlers) UpdateIPAddress(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	if h.AuditService != nil {
-		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action: "ipam.ip_address.update", EntityType: "ip_address", EntityID: ip.ID,
 			After: map[string]any{"ip_address": ip.IpAddress, "status": ip.Status},
 		})
@@ -109,10 +109,10 @@ func (h *Handlers) DeleteIPAddress(c echo.Context) error {
 	}
 
 	if err := h.IPAddressService.DeleteIPAddress(c.Request().Context(), id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	if h.AuditService != nil {
-		h.AuditService.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action: "ipam.ip_address.delete", EntityType: "ip_address", EntityID: id,
 		})
 	}

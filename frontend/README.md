@@ -9,8 +9,9 @@ authoritative lockfile and is checked in. Do not commit `pnpm-lock.yaml`,
 `yarn.lock`, or `bun.lockb` — multiple lockfiles drift apart and produce
 non-reproducible builds.
 
-The Docker image (`frontend/Dockerfile`) runs `npm install && npm run build`,
-so any contributor change must work with that exact toolchain.
+The Docker image (`frontend/Dockerfile`) runs `npm ci && npm run build`,
+so any contributor change must work with that exact toolchain — the build
+fails fast if `package-lock.json` is out of sync with `package.json`.
 
 ## Build from a clean checkout
 

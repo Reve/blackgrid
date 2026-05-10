@@ -224,7 +224,7 @@ type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Email        string             `json:"email"`
 	DisplayName  string             `json:"display_name"`
-	PasswordHash string             `json:"password_hash"`
+	PasswordHash string             `json:"-"`
 	Role         string             `json:"role"`
 	Enabled      bool               `json:"enabled"`
 	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`

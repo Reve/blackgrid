@@ -11,7 +11,7 @@ import (
 func (h *Handlers) GetSites(c echo.Context) error {
 	sites, err := h.SiteService.GetSites(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, sites)
 }
@@ -37,7 +37,7 @@ func (h *Handlers) CreateSite(c echo.Context) error {
 
 	site, err := h.SiteService.CreateSite(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusCreated, site)
 }
@@ -56,7 +56,7 @@ func (h *Handlers) UpdateSite(c echo.Context) error {
 
 	site, err := h.SiteService.UpdateSite(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, site)
 }
@@ -68,7 +68,7 @@ func (h *Handlers) DeleteSite(c echo.Context) error {
 	}
 
 	if err := h.SiteService.DeleteSite(c.Request().Context(), id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.NoContent(http.StatusNoContent)
 }

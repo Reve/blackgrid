@@ -106,7 +106,7 @@ SELECT length(session_hash), session_hash FROM sessions LIMIT 1;
 * Curl the stream directly:
 
   ```bash
-  curl -N --cookie "blackgrid_session=…" http://localhost:8080/api/v1/events
+  curl -N --cookie "blackgrid_session=…" http://localhost:8080/api/v1/events/stream
   ```
 
   Frames must contain all three lines: `id:`, `event:`, `data:` followed

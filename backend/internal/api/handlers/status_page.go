@@ -68,7 +68,7 @@ func (h *StatusPageHandler) CreateStatusPage(c echo.Context) error {
 		return statusPageError(c, err)
 	}
 	if h.audit != nil {
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action:     "status_page.create",
 			EntityType: "status_page",
 			EntityID:   page.ID,
@@ -104,7 +104,7 @@ func (h *StatusPageHandler) UpdateStatusPage(c echo.Context) error {
 		return statusPageError(c, err)
 	}
 	if h.audit != nil {
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action:     "status_page.update",
 			EntityType: "status_page",
 			EntityID:   page.ID,
@@ -123,7 +123,7 @@ func (h *StatusPageHandler) DeleteStatusPage(c echo.Context) error {
 		return statusPageError(c, err)
 	}
 	if h.audit != nil {
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action: "status_page.delete", EntityType: "status_page", EntityID: id,
 		})
 	}

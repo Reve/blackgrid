@@ -309,7 +309,7 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 	}
 
 	if h.AuditService != nil {
-		h.AuditService.Log(ctx, service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action:     "monitor.create",
 			EntityType: "monitor",
 			EntityID:   m.ID,
@@ -435,7 +435,7 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 	}
 
 	if h.AuditService != nil {
-		h.AuditService.Log(ctx, service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action:     "monitor.update",
 			EntityType: "monitor",
 			EntityID:   updated.ID,
@@ -534,7 +534,7 @@ func (h *MonitorHandler) DeleteMonitor(c echo.Context) error {
 	}
 
 	if h.AuditService != nil {
-		h.AuditService.Log(ctx, service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action:     "monitor.delete",
 			EntityType: "monitor",
 			EntityID:   uuid,
@@ -616,7 +616,7 @@ func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) 
 	}
 
 	if h.AuditService != nil {
-		h.AuditService.Log(ctx, service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action:     auditActionForStatus(status),
 			EntityType: "monitor",
 			EntityID:   updated.ID,
@@ -701,7 +701,7 @@ func (h *MonitorHandler) TestMonitor(c echo.Context) error {
 	}
 
 	if h.AuditService != nil {
-		h.AuditService.Log(ctx, service.AuditParams{
+		LogAudit(h.AuditService, c, service.AuditParams{
 			Action:     "monitor.test",
 			EntityType: "monitor",
 			EntityID:   m.ID,
@@ -912,7 +912,7 @@ func (h *MonitorHandler) RotatePushToken(c echo.Context) error {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
-	h.AuditService.Log(ctx, service.AuditParams{
+	LogAudit(h.AuditService, c, service.AuditParams{
 		Action:     "monitor.push_token.rotate",
 		EntityType: "monitor",
 		EntityID:   m.ID,

@@ -71,9 +71,9 @@ func CustomHTTPErrorHandler(err error, c echo.Context) {
 	// Don't leak internal errors in production-like environments
 	// For now, we'll keep the message if it's not a 500, or if it's explicitly set.
 	if code == http.StatusInternalServerError && errCode == ErrCodeInternal {
-		// Log the actual error here (we'll add structured logging later)
+		// Always log the underlying error; never include it in the response body.
 		c.Logger().Error(err)
-		message = "An internal server error occurred"
+		message = "internal error"
 	}
 
 	requestID := c.Response().Header().Get(echo.HeaderXRequestID)

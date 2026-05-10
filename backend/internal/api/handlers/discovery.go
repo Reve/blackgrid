@@ -152,7 +152,7 @@ func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
-	h.AuditService.Log(c.Request().Context(), service.AuditParams{
+	LogAudit(h.AuditService, c, service.AuditParams{
 		Action:     "discovery.result_accept",
 		EntityType: "discovery_result",
 		EntityID:   id,
@@ -172,7 +172,7 @@ func (h *Handlers) IgnoreDiscoveryResult(c echo.Context) error {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
-	h.AuditService.Log(c.Request().Context(), service.AuditParams{
+	LogAudit(h.AuditService, c, service.AuditParams{
 		Action:     "discovery.result_ignore",
 		EntityType: "discovery_result",
 		EntityID:   id,

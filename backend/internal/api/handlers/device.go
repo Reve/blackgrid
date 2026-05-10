@@ -11,7 +11,7 @@ import (
 func (h *Handlers) GetDevices(c echo.Context) error {
 	devices, err := h.DeviceService.GetDevices(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, devices)
 }
@@ -37,7 +37,7 @@ func (h *Handlers) CreateDevice(c echo.Context) error {
 
 	device, err := h.DeviceService.CreateDevice(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusCreated, device)
 }
@@ -56,7 +56,7 @@ func (h *Handlers) UpdateDevice(c echo.Context) error {
 
 	device, err := h.DeviceService.UpdateDevice(c.Request().Context(), *req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.JSON(http.StatusOK, device)
 }
@@ -68,7 +68,7 @@ func (h *Handlers) DeleteDevice(c echo.Context) error {
 	}
 
 	if err := h.DeviceService.DeleteDevice(c.Request().Context(), id); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
 	}
 	return c.NoContent(http.StatusNoContent)
 }

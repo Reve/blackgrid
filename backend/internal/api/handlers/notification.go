@@ -131,7 +131,7 @@ func (h *NotificationHandler) CreateChannel(c echo.Context) error {
 	if h.audit != nil {
 		// MaskedConfig() strips sensitive fields like passwords/tokens
 		// before they enter the audit trail.
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action:     "notification_channel.create",
 			EntityType: "notification_channel",
 			EntityID:   ch.ID,
@@ -187,7 +187,7 @@ func (h *NotificationHandler) UpdateChannel(c echo.Context) error {
 		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 	if h.audit != nil {
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action:     "notification_channel.update",
 			EntityType: "notification_channel",
 			EntityID:   ch.ID,
@@ -207,7 +207,7 @@ func (h *NotificationHandler) DeleteChannel(c echo.Context) error {
 		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	if h.audit != nil {
-		h.audit.Log(c.Request().Context(), service.AuditParams{
+		LogAudit(h.audit, c, service.AuditParams{
 			Action:     "notification_channel.delete",
 			EntityType: "notification_channel",
 			EntityID:   id,

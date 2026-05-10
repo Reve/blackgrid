@@ -14,12 +14,10 @@ import (
 
 func cleanupAuthData(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
-	t.Cleanup(func() {
-		ctx := context.Background()
-		pool.Exec(ctx, "DELETE FROM sessions")
-		pool.Exec(ctx, "DELETE FROM api_tokens")
-		pool.Exec(ctx, "DELETE FROM users")
-	})
+	ctx := context.Background()
+	pool.Exec(ctx, "DELETE FROM sessions")
+	pool.Exec(ctx, "DELETE FROM api_tokens")
+	pool.Exec(ctx, "DELETE FROM users")
 }
 
 func requireAuthSchema2(t *testing.T, pool *pgxpool.Pool) {
