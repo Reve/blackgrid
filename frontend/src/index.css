@@ -3,21 +3,103 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: dark;
+    --color-brand: #adff00;
+    --color-orange: #ff4700;
+    --color-neutral: #fafae5;
+    --color-dross: #9e9e91;
+    --color-crude: #0b0b0b;
+    --color-line: hsla(60, 68%, 94%, 0.145);
+  }
+
   body {
     @apply bg-background text-text-main font-mono antialiased;
+    background-image:
+      linear-gradient(var(--color-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    background-position: -1px -1px;
   }
+
+  h1, h2, h3, h4 {
+    @apply uppercase tracking-[0.08em] text-text-main;
+    font-weight: 600;
+  }
+
+  ::selection {
+    background: var(--color-brand);
+    color: #000;
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #000; }
+  ::-webkit-scrollbar-thumb { background: #1a1a17; border: 1px solid var(--color-line); }
+  ::-webkit-scrollbar-thumb:hover { background: #2a2a25; }
 }
 
 @layer components {
   .panel {
-    @apply bg-panel border border-surface rounded p-4;
+    @apply bg-panel border border-line rounded-none p-4 relative;
+  }
+
+  .panel-grid {
+    @apply panel;
+    background-image:
+      linear-gradient(var(--color-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-line) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 
   .terminal-input {
-    @apply bg-surface border border-[#333] rounded px-3 py-2 text-text-main focus:outline-none focus:border-signal-green;
+    @apply bg-black border border-line rounded-none px-3 py-2 text-text-main
+           placeholder:text-text-dim
+           focus:outline-none focus:border-brand focus:shadow-brand-glow
+           transition-[border-color,box-shadow] duration-150;
   }
 
   .terminal-button {
-    @apply bg-surface border border-[#333] text-text-main px-4 py-2 rounded hover:border-signal-green transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-transparent border border-line rounded-none text-text-main
+           uppercase tracking-[0.12em] text-sm
+           px-4 py-2
+           hover:border-brand hover:text-brand
+           transition-colors duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line disabled:hover:text-text-main;
+  }
+
+  .terminal-button-primary {
+    @apply bg-brand text-black border border-brand rounded-none
+           uppercase tracking-[0.12em] text-sm font-semibold
+           px-4 py-2
+           hover:bg-brand-dim hover:border-brand-dim hover:shadow-brand-glow
+           transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .terminal-button-danger {
+    @apply terminal-button hover:border-signal-red hover:text-signal-red;
+  }
+
+  .hud-separator {
+    @apply flex items-center gap-2 text-text-dim text-xs uppercase tracking-[0.2em];
+  }
+  .hud-separator::before,
+  .hud-separator::after {
+    content: '';
+    @apply flex-1 h-px bg-line;
+  }
+
+  .status-dot { @apply inline-block w-2 h-2 rounded-full; }
+  .status-dot-up    { @apply bg-brand shadow-[0_0_8px_#adff00]; }
+  .status-dot-warn  { @apply bg-accent-orange shadow-[0_0_8px_#ff4700]; }
+  .status-dot-down  { @apply bg-signal-red shadow-[0_0_8px_#c20046]; }
+  .status-dot-idle  { @apply bg-text-dim; }
+
+  .hud-title {
+    @apply uppercase tracking-[0.12em] text-text-main pl-3 border-l-2 border-accent-orange;
+  }
+
+  .brand-link {
+    @apply text-brand hover:text-brand-dim transition-colors;
   }
 }

@@ -38,27 +38,30 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-surface p-4 bg-panel">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="text-signal-green text-2xl font-bold">BLACKGRID</span>
-            <span className="text-text-muted text-xs bg-surface px-2 py-1 rounded">v0.1.0</span>
+      <header className="border-b border-line bg-black/80 backdrop-blur-sm relative">
+        <div className="absolute left-0 top-0 h-full w-1 bg-accent-orange" />
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-brand text-2xl font-bold tracking-[0.18em] font-display">BLACKGRID</span>
+            <span className="text-accent-orange text-xs">■</span>
+            <span className="text-text-muted text-[10px] uppercase tracking-[0.2em] border border-line px-2 py-0.5">v0.1.0</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className={`text-xs ${isConnected ? 'text-signal-green' : 'text-signal-red'} ${isConnected ? 'animate-pulse' : ''}`}>
+            <div className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${isConnected ? 'text-brand' : 'text-signal-red'}`}>
+              <span className={`status-dot ${isConnected ? 'status-dot-up' : 'status-dot-down'} ${isConnected ? 'animate-pulse' : ''}`} />
               {isConnected ? 'SYSTEM_ONLINE' : 'SYSTEM_OFFLINE'}
             </div>
             {user && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-text-muted">{user.display_name}</span>
-                <span className="text-border-color">·</span>
-                <span className={`${user.role === 'admin' ? 'text-signal-amber' : user.role === 'operator' ? 'text-signal-green' : 'text-text-muted'} uppercase`}>
+                <span className="text-text-dim">·</span>
+                <span className={`uppercase tracking-[0.12em] ${user.role === 'admin' ? 'text-accent-orange' : user.role === 'operator' ? 'text-brand' : 'text-text-muted'}`}>
                   {user.role}
                 </span>
                 <button
                   id="signout-btn"
                   onClick={signOut}
-                  className="ml-2 text-text-muted hover:text-signal-red transition-colors"
+                  className="ml-2 text-text-muted hover:text-signal-red transition-colors uppercase tracking-[0.12em]"
                 >
                   SIGN OUT
                 </button>
@@ -69,21 +72,28 @@ function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="container mx-auto flex-grow flex flex-col md:flex-row p-4 gap-6 min-h-0">
-        <aside className="w-full md:w-48 flex-shrink-0">
-          <nav className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`block px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
-                  location.pathname === item.path
-                    ? 'bg-signal-green/10 text-signal-green border-l-0 md:border-l-2 border-b-2 md:border-b-0 border-signal-green'
-                    : 'text-text-muted hover:text-text-main hover:bg-surface'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+        <aside className="w-full md:w-52 flex-shrink-0">
+          <div className="hidden md:flex items-center gap-2 mb-3 pl-3 border-l-2 border-accent-orange">
+            <span className="text-text-dim text-[10px] uppercase tracking-[0.25em]">Navigation</span>
+          </div>
+          <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
+            {navItems.map((item) => {
+              const active = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`relative block px-4 py-2 text-xs uppercase tracking-[0.14em] whitespace-nowrap transition-colors ${
+                    active
+                      ? 'bg-brand-glow text-brand border-l-2 border-brand'
+                      : 'text-text-muted hover:text-text-main hover:bg-panel border-l-2 border-transparent'
+                  }`}
+                >
+                  {active && <span className="text-accent-orange mr-2">▸</span>}
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
         </aside>
         
@@ -112,8 +122,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading || checkingSetup) {
     return (
-      <div className="min-h-screen bg-bg-deep flex items-center justify-center text-signal-green text-sm tracking-widest">
-        INITIALIZING...
+      <div className="min-h-screen bg-background flex items-center justify-center text-brand text-sm uppercase tracking-[0.3em] animate-pulse">
+        <span className="text-accent-orange mr-2">■</span> INITIALIZING...
       </div>
     );
   }

@@ -28,16 +28,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg-deep flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="text-signal-green text-4xl font-bold tracking-widest mb-1">BLACKGRID</div>
-          <div className="text-text-muted text-xs tracking-widest">HOMELAB CONTROL PLANE</div>
+          <div className="text-brand text-4xl font-bold tracking-[0.2em] mb-2 font-display">BLACKGRID</div>
+          <div className="hud-separator"><span>Homelab Control Plane</span></div>
         </div>
 
-        <div className="panel border border-surface">
-          <h2 className="text-signal-green text-lg font-bold mb-6 tracking-wider">AUTHENTICATE</h2>
+        <div className="panel border-l-2 border-l-accent-orange">
+          <h2 className="hud-title text-lg mb-6">■ Authenticate</h2>
 
           {error && (
             <div className="mb-4 p-3 border border-signal-red bg-signal-red/10 text-signal-red text-sm">
@@ -55,7 +55,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="bg-bg-deep border border-border-color text-text-main p-2 text-sm focus:border-signal-green outline-none transition-colors"
+                className="terminal-input"
                 placeholder="admin@homelab.local"
               />
             </div>
@@ -69,7 +69,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="bg-bg-deep border border-border-color text-text-main p-2 text-sm focus:border-signal-green outline-none transition-colors"
+                className="terminal-input"
               />
             </div>
 
@@ -77,7 +77,7 @@ export default function LoginPage() {
               id="login-submit"
               type="submit"
               disabled={loading}
-              className="mt-2 border border-signal-green text-signal-green px-4 py-2 text-sm font-bold tracking-wider hover:bg-signal-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="terminal-button-primary mt-2"
             >
               {loading ? 'AUTHENTICATING...' : 'LOGIN'}
             </button>
