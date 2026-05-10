@@ -42,14 +42,18 @@ SELECT length(session_hash), session_hash FROM sessions LIMIT 1;
 
 ## 3. Core IPAM flow
 
-* Settings → Sites → create a site.
-* IPAM → Prefixes → create `192.0.2.0/24` linked to the site.
+* IPAM → **Sites panel** → click `+ NEW SITE` → create a site (name + optional
+  description). The site appears in the Sites table.
+* IPAM → **Prefixes panel** → click `+ NEW PREFIX` → create `192.0.2.0/24`
+  linked to the site you just made.
+* (Optionally) **Devices page** → click `+ NEW DEVICE` → create a device,
+  attaching it to the site so the onboarding checklist marks it complete.
 * `GET /api/v1/prefixes/{id}/utilization` returns `total_hosts: 254`,
   `allocated: 0`, `free: 254`, `percent_used: 0`.
 * `GET /api/v1/prefixes/{id}/next-available` returns the first usable host.
-* IP Addresses → create `192.0.2.10` under the prefix → `POST .../reserve`
-  → `POST .../assign` → `POST .../release`. Status field follows
-  `available` → `reserved` → `assigned` → `available`.
+* IPAM → **IP Addresses panel** → click `+ NEW IP` → create `192.0.2.10`
+  under the prefix. Click `reserve` → `assign` → `release` in the row to
+  confirm status follows `available` → `reserved` → `assigned` → `available`.
 * Each step writes an `ipam.*` row to `audit_log`.
 
 ## 4. Monitor creation and testing

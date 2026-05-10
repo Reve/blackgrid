@@ -79,6 +79,32 @@ Blackgrid is designed to be deployed using Docker and Docker Compose. This guide
   scan, expressed as the prefix length. Default `22` — `/22` (1024
   addresses) is the largest allowed; smaller numeric values mean wider
   prefixes and are rejected with HTTP 422.
+- `DISCOVERY_DEFAULT_PORTS`: Comma-separated TCP probe port list. Default
+  `22,53,80,443,5432,6379,8000,8080,9000,9443`. Invalid entries are dropped
+  and a warning is logged at startup. If parsing yields no valid ports the
+  built-in defaults are used.
+- `DISCOVERY_ENABLE_PING`: `true|false` (default `false`). When enabled and
+  the runtime supports raw sockets (host networking or `CAP_NET_RAW`),
+  Blackgrid may use ICMP to corroborate TCP probe results. The `/api/v1/discovery/diagnostics` endpoint reports whether ping is active.
+
+### LAN discovery & Docker networking
+
+Discovery uses TCP connect probes. A bridge-mode backend container can reach
+LAN addresses only through the host's routing table; firewalled hosts with no
+TCP ports in `DISCOVERY_DEFAULT_PORTS` will not appear.
+
+For best LAN discovery on Linux, host networking sidesteps NAT:
+
+```yaml
+backend:
+  network_mode: host
+```
+
+This is Linux-specific and changes how ports are exposed. ICMP/ARP discovery
+typically requires host networking, `CAP_NET_RAW`, or a host-side agent. ARP
+discovery cannot work reliably from a normal bridge container for arbitrary
+LAN subnets. On Docker Desktop/macOS, containers run inside a VM, so LAN
+visibility may differ from a Linux host.
 
 ## Resource Requirements
 

@@ -266,6 +266,8 @@ func main() {
 	api.GET("/discovery/results", h.GetDiscoveryResults)
 	api.POST("/discovery/results/:id/accept", h.AcceptDiscoveryResult, operatorMW)
 	api.POST("/discovery/results/:id/ignore", h.IgnoreDiscoveryResult, operatorMW)
+	api.GET("/discovery/diagnostics", h.GetDiscoveryDiagnostics, operatorMW)
+	api.POST("/discovery/probe", h.PostDiscoveryProbe, operatorMW)
 
 	// Monitors
 	api.GET("/monitors", monitorHandler.GetMonitors)

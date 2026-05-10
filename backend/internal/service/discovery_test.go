@@ -145,6 +145,44 @@ func TestTCPProberNoListener(t *testing.T) {
 	}
 }
 
+func TestParsePortsList(t *testing.T) {
+	cases := []struct {
+		in       string
+		wantOK   bool
+		wantList []int
+	}{
+		{"", false, nil},
+		{"   ", false, nil},
+		{"abc", false, nil},
+		{"0,99999", false, nil},
+		{"22,80,443", true, []int{22, 80, 443}},
+		{"443,22,80", true, []int{22, 80, 443}},
+		{"22, 22, 22, 80", true, []int{22, 80}},
+		{"22,abc,80", true, []int{22, 80}},
+		{"22,-1,80", true, []int{22, 80}},
+		{"22,65535", true, []int{22, 65535}},
+	}
+	for _, tc := range cases {
+		got, ok := ParsePortsList(tc.in)
+		if ok != tc.wantOK {
+			t.Errorf("ParsePortsList(%q) ok=%v want %v", tc.in, ok, tc.wantOK)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if len(got) != len(tc.wantList) {
+			t.Errorf("ParsePortsList(%q) = %v want %v", tc.in, got, tc.wantList)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.wantList[i] {
+				t.Errorf("ParsePortsList(%q)[%d] = %d want %d", tc.in, i, got[i], tc.wantList[i])
+			}
+		}
+	}
+}
+
 func TestTCPProberReverseDNSFailureNotFatal(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

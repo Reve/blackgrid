@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  getSites,
   getPrefixes,
   getDevices,
   getMonitors,
@@ -28,7 +29,8 @@ export default function OnboardingChecklist() {
     let cancelled = false;
     (async () => {
       try {
-        const [prefixes, devices, monitors, channels, pages] = await Promise.all([
+        const [sites, prefixes, devices, monitors, channels, pages] = await Promise.all([
+          getSites().catch(() => ({ data: [] })),
           getPrefixes().catch(() => ({ data: [] })),
           getDevices().catch(() => ({ data: [] })),
           getMonitors().catch(() => ({ data: [] })),
@@ -36,9 +38,8 @@ export default function OnboardingChecklist() {
           listStatusPages().catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
-        const hasSite = (prefixes.data ?? []).length > 0; // sites are created implicitly via prefixes in MVP UX
         setSteps([
-          { key: 'site',     label: 'Create a site',                to: '/ipam',         done: hasSite },
+          { key: 'site',     label: 'Create a site',                to: '/ipam',         done: (sites.data ?? []).length > 0 },
           { key: 'prefix',   label: 'Create a prefix',              to: '/ipam',         done: (prefixes.data ?? []).length > 0 },
           { key: 'device',   label: 'Create a device',              to: '/devices',      done: (devices.data ?? []).length > 0 },
           { key: 'monitor',  label: 'Create your first monitor',    to: '/monitors',     done: (monitors.data ?? []).length > 0 },

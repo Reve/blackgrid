@@ -7,10 +7,14 @@ import {
   listDiscoveryResults,
   listDiscoveryScans,
   startDiscoveryScan,
+  getDiscoveryDiagnostics,
+  probeDiscoveryHost,
   type DiscoveryClassification,
   type DiscoveryResult,
   type DiscoveryScan,
   type Prefix,
+  type DiscoveryDiagnostics,
+  type DiscoveryProbeResponse,
 } from '../api/client';
 import { useEvents } from '../context/EventContext';
 
@@ -51,6 +55,12 @@ export default function Discovery() {
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiscoveryDiagnostics | null>(null);
+  const [probeAddr, setProbeAddr] = useState('');
+  const [probePorts, setProbePorts] = useState('');
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<DiscoveryProbeResponse | null>(null);
+  const [probeError, setProbeError] = useState('');
   const { subscribe } = useEvents();
 
   const refresh = async () => {
@@ -76,6 +86,12 @@ export default function Discovery() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterPrefix, filterClass, filterIgnored]);
+
+  useEffect(() => {
+    getDiscoveryDiagnostics()
+      .then((r) => setDiagnostics(r.data))
+      .catch(() => setDiagnostics(null));
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -168,6 +184,63 @@ export default function Discovery() {
     navigate(`/monitors?${params.toString()}`);
   };
 
+  const handleProbe = async () => {
+    setProbeError('');
+    setProbeResult(null);
+    if (!probeAddr.trim()) {
+      setProbeError('Address is required');
+      return;
+    }
+    let ports: number[] | undefined;
+    if (probePorts.trim()) {
+      ports = probePorts
+        .split(',')
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= 65535);
+      if (ports.length === 0) {
+        setProbeError('No valid ports in list');
+        return;
+      }
+    }
+    setProbing(true);
+    try {
+      const r = await probeDiscoveryHost({ address: probeAddr.trim(), ports });
+      setProbeResult(r.data);
+    } catch (e: any) {
+      setProbeError(e?.message || 'Probe failed');
+    } finally {
+      setProbing(false);
+    }
+  };
+
+  const lastCompletedScan = useMemo(
+    () => scans.find((s) => s.status === 'completed') || null,
+    [scans],
+  );
+
+  const lastScanResults = useMemo(() => {
+    if (!lastCompletedScan) return [] as DiscoveryResult[];
+    return results.filter((r) => r.scan_id === lastCompletedScan.id);
+  }, [results, lastCompletedScan]);
+
+  const lastScanCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      new: 0,
+      known: 0,
+      changed: 0,
+      stale: 0,
+      conflict: 0,
+    };
+    for (const r of lastScanResults) {
+      if (r.classification === 'duplicate') counts.conflict++;
+      else if (counts[r.classification] !== undefined) counts[r.classification]++;
+    }
+    return counts;
+  }, [lastScanResults]);
+
+  const showEmptyScanHint =
+    lastCompletedScan && lastScanResults.length === 0 && !filterPrefix && !filterClass;
+
   const newHosts = useMemo(
     () => results.filter((r) => r.classification === 'new' && !r.ignored).slice(0, 10),
     [results],
@@ -182,6 +255,120 @@ export default function Discovery() {
 
   return (
     <div className="space-y-6">
+      {/* Diagnostics */}
+      <div className="panel">
+        <h2 className="text-xl text-signal-green mb-4">Discovery Diagnostics</h2>
+        {diagnostics ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm font-mono">
+            <div>
+              <span className="text-text-muted">Default Ports: </span>
+              <span className="text-signal-green">
+                {diagnostics.default_ports.join(', ')}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">TCP Timeout: </span>
+              <span className="text-signal-green">{diagnostics.tcp_timeout_ms} ms</span>
+            </div>
+            <div>
+              <span className="text-text-muted">Workers: </span>
+              <span className="text-signal-green">{diagnostics.worker_count}</span>
+            </div>
+            <div>
+              <span className="text-text-muted">Ping Supported: </span>
+              <span
+                className={
+                  diagnostics.ping_supported ? 'text-signal-green' : 'text-signal-amber'
+                }
+              >
+                {diagnostics.ping_supported ? 'yes' : 'no'}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">Inside Container: </span>
+              <span className="text-signal-green">
+                {diagnostics.runtime.inside_container ? 'yes' : 'no'}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">Hostname: </span>
+              <span className="text-signal-green">{diagnostics.runtime.hostname}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="text-text-muted text-sm">
+            Diagnostics unavailable (operator/admin role required).
+          </div>
+        )}
+        <div className="mt-4 text-xs text-text-muted italic">
+          Discovery currently detects hosts by TCP open ports unless ping support is
+          enabled.
+        </div>
+      </div>
+
+      {/* Probe Host */}
+      <div className="panel">
+        <h2 className="text-xl text-signal-green mb-4">Probe Host</h2>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col text-xs uppercase tracking-[0.12em] text-text-muted">
+            Address
+            <input
+              placeholder="10.10.13.1"
+              className="mt-1 bg-surface border border-surface text-text-main px-3 py-2 rounded text-sm w-48"
+              value={probeAddr}
+              onChange={(e) => setProbeAddr(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col text-xs uppercase tracking-[0.12em] text-text-muted">
+            Ports (comma-separated, optional)
+            <input
+              placeholder="22,80,443"
+              className="mt-1 bg-surface border border-surface text-text-main px-3 py-2 rounded text-sm w-64"
+              value={probePorts}
+              onChange={(e) => setProbePorts(e.target.value)}
+            />
+          </label>
+          <button
+            onClick={handleProbe}
+            disabled={probing}
+            className="bg-signal-green/10 border border-signal-green text-signal-green px-4 py-2 rounded text-sm hover:bg-signal-green/20 disabled:opacity-50"
+          >
+            {probing ? 'PROBING…' : 'PROBE'}
+          </button>
+        </div>
+        {probeError && <div className="text-signal-red text-sm mt-2">{probeError}</div>}
+        {probeResult && (
+          <div className="mt-4 text-sm font-mono space-y-1">
+            <div>
+              <span className="text-text-muted">seen: </span>
+              <span
+                className={probeResult.seen ? 'text-signal-green' : 'text-signal-amber'}
+              >
+                {probeResult.seen ? 'yes' : 'no'}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">open ports: </span>
+              <span className="text-signal-green">
+                {probeResult.open_ports.length === 0
+                  ? '-'
+                  : probeResult.open_ports.join(', ')}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">latency: </span>
+              <span className="text-signal-green">
+                {probeResult.latency_ms ? `${probeResult.latency_ms}ms` : '-'}
+              </span>
+            </div>
+            <div>
+              <span className="text-text-muted">reverse dns: </span>
+              <span className="text-signal-green">{probeResult.reverse_dns || '-'}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="panel">
         <h2 className="text-xl text-signal-green mb-4">Manual Scan</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -208,8 +395,32 @@ export default function Discovery() {
         </div>
       </div>
 
+      {showEmptyScanHint && (
+        <div className="panel border-l-2 border-l-signal-amber bg-signal-amber/5">
+          <h3 className="text-signal-amber uppercase tracking-[0.14em] text-sm mb-2">
+            ■ No hosts detected in last scan
+          </h3>
+          <p className="text-sm text-text-muted">
+            Blackgrid discovery uses TCP probes against configured ports. The subnet may
+            be reachable but hosts with closed/firewalled ports will not appear. Use
+            Probe Host to test a known IP/port, or configure{' '}
+            <code className="text-signal-green">DISCOVERY_DEFAULT_PORTS</code>.
+          </p>
+        </div>
+      )}
+
       <div className="panel">
         <h2 className="text-xl text-signal-green mb-4">Recent Scans</h2>
+        {lastCompletedScan && (
+          <div className="mb-3 text-xs font-mono text-text-muted">
+            Latest completed:{' '}
+            <span className="text-signal-green">new {lastScanCounts.new}</span>{' '}
+            <span className="text-signal-green">known {lastScanCounts.known}</span>{' '}
+            <span className="text-signal-amber">changed {lastScanCounts.changed}</span>{' '}
+            <span className="text-text-muted">stale {lastScanCounts.stale}</span>{' '}
+            <span className="text-signal-red">conflict {lastScanCounts.conflict}</span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
             <thead>

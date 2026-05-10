@@ -27,6 +27,8 @@ and reconciles findings back into IPAM.
 | `DISCOVERY_MAX_IPV4_PREFIX_SIZE` | `22` | Reject manual scans of IPv4 prefixes shorter than this |
 | `DISCOVERY_TCP_TIMEOUT_MS` | `750` | Per-port TCP connect timeout |
 | `DISCOVERY_PING_TIMEOUT_MS` | `750` | ICMP ping timeout (when ping is enabled) |
+| `DISCOVERY_DEFAULT_PORTS` | `22,53,80,443,5432,6379,8000,8080,9000,9443` | Comma-separated TCP probe ports. Invalid values are dropped; if no valid ports remain Blackgrid logs a warning and falls back to the default list. |
+| `DISCOVERY_ENABLE_PING` | `false` | Enable ICMP-assisted discovery. Requires `CAP_NET_RAW` (Linux) or host networking. |
 
 ## Probe methods
 
@@ -96,8 +98,50 @@ The scheduler stops cleanly on `SIGINT`/`SIGTERM` via a cancellable context.
 - **Duplicate detected** → conflicting `ip_addresses.status` is set to
   `conflict`.
 
+## Diagnostics & probing (operator/admin)
+
+- `GET /api/v1/discovery/diagnostics` returns the configured worker count,
+  default ports, TCP timeout, ping support flag, and runtime info (hostname,
+  inside-container heuristic). It does not return secrets or raw routes.
+- `POST /api/v1/discovery/probe { "address": "10.10.13.1", "ports": [22,80] }`
+  runs a one-off TCP probe against an address that **must** belong to a stored
+  prefix. Arbitrary internet probing is rejected. Ports are optional; when
+  omitted the configured default port list is used. The Discovery page exposes
+  both via the **Discovery Diagnostics** and **Probe Host** panels.
+- If a scan completes with zero results the UI shows a hint explaining that
+  TCP-only discovery cannot see firewalled hosts and pointing to the Probe Host
+  form.
+
 ## Docker / runtime notes
 
+- The default discovery scanner is **TCP-based**. It only sees hosts with
+  open TCP ports listed in `DISCOVERY_DEFAULT_PORTS`.
 - ICMP ping requires `CAP_NET_RAW` or `--privileged`. Without it Blackgrid
-  silently falls back to TCP-only discovery; this is intentional.
+  silently falls back to TCP-only discovery; this is intentional. Set
+  `DISCOVERY_ENABLE_PING=true` to opt in once the runtime allows raw sockets.
 - ARP / MAC discovery is not performed in containers; the field stays `NULL`.
+  ARP discovery cannot work reliably from a normal bridge container for
+  arbitrary LAN subnets.
+- If the backend runs inside Docker bridge mode it must have a route to the
+  homelab subnet. On Linux Docker, bridge containers can usually reach LAN
+  routes through the host if routing/firewall allows it. On Docker
+  Desktop/macOS, LAN/subnet behaviour may differ because containers run inside
+  a VM.
+
+For best LAN discovery on Linux, one option is host networking:
+
+```yaml
+backend:
+  network_mode: host
+```
+
+This is Linux-specific and changes how ports are exposed. An alternative if
+you want ICMP without giving up bridge networking:
+
+```yaml
+backend:
+  cap_add:
+    - NET_RAW
+```
+
+Only useful when ping support is implemented and `DISCOVERY_ENABLE_PING=true`.

@@ -33,33 +33,125 @@ api.interceptors.response.use(
 
 // ---- Existing types ----
 
+export interface Site {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CreateSiteInput {
+  name: string;
+  description?: string | null;
+}
+
+export interface Vlan {
+  id: string;
+  site_id: string | null;
+  vlan_id: number;
+  name: string;
+  description: string | null;
+}
+
+export interface CreateVlanInput {
+  site_id?: string | null;
+  vlan_id: number;
+  name: string;
+  description?: string | null;
+}
+
 export interface Prefix {
   id: string;
+  site_id?: string | null;
+  vlan_id?: string | null;
   prefix: string;
   description: string;
   scan_enabled?: boolean;
   scan_interval_seconds?: number;
 }
 
+export interface CreatePrefixInput {
+  site_id: string;
+  vlan_id?: string | null;
+  prefix: string;
+  description?: string | null;
+}
+
 export interface IPAddress {
   id: string;
   prefix_id: string;
   ip_address: string;
+  interface_id?: string | null;
   status: string;
   description: string;
   last_seen_at?: string | null;
 }
 
+export interface CreateIPAddressInput {
+  prefix_id: string;
+  ip_address: string;
+  interface_id?: string | null;
+  status?: string | null;
+  description?: string | null;
+}
+
 export interface Device {
   id: string;
   name: string;
+  site_id?: string | null;
   status: string;
   description: string;
 }
 
+export interface CreateDeviceInput {
+  name: string;
+  site_id?: string | null;
+  description?: string | null;
+  status?: string | null;
+}
+
+// Sites
+export const getSites = () => api.get<Site[]>('/sites');
+export const createSite = (data: CreateSiteInput) => api.post<Site>('/sites', data);
+export const updateSite = (id: string, data: CreateSiteInput) =>
+  api.put<Site>(`/sites/${id}`, data);
+export const deleteSite = (id: string) => api.delete(`/sites/${id}`);
+
+// VLANs
+export const getVlans = () => api.get<Vlan[]>('/vlans');
+export const createVlan = (data: CreateVlanInput) => api.post<Vlan>('/vlans', data);
+export const updateVlan = (id: string, data: CreateVlanInput) =>
+  api.put<Vlan>(`/vlans/${id}`, data);
+export const deleteVlan = (id: string) => api.delete(`/vlans/${id}`);
+
+// Prefixes
 export const getPrefixes = () => api.get<Prefix[]>('/prefixes');
+export const createPrefix = (data: CreatePrefixInput) => api.post<Prefix>('/prefixes', data);
+export const updatePrefix = (id: string, data: CreatePrefixInput) =>
+  api.put<Prefix>(`/prefixes/${id}`, data);
+export const deletePrefix = (id: string) => api.delete(`/prefixes/${id}`);
+
+// IP Addresses
 export const getIPAddresses = () => api.get<IPAddress[]>('/ip-addresses');
+export const createIPAddress = (data: CreateIPAddressInput) =>
+  api.post<IPAddress>('/ip-addresses', data);
+export const updateIPAddress = (id: string, data: CreateIPAddressInput) =>
+  api.put<IPAddress>(`/ip-addresses/${id}`, data);
+export const deleteIPAddress = (id: string) => api.delete(`/ip-addresses/${id}`);
+export const reserveIPAddress = (id: string) =>
+  api.post<IPAddress>(`/ip-addresses/${id}/reserve`);
+export const assignIPAddress = (id: string) =>
+  api.post<IPAddress>(`/ip-addresses/${id}/assign`);
+export const releaseIPAddress = (id: string) =>
+  api.post<IPAddress>(`/ip-addresses/${id}/release`);
+
+// Devices
 export const getDevices = () => api.get<Device[]>('/devices');
+export const createDevice = (data: CreateDeviceInput) => api.post<Device>('/devices', data);
+export const updateDevice = (id: string, data: CreateDeviceInput) =>
+  api.put<Device>(`/devices/${id}`, data);
+export const deleteDevice = (id: string) => api.delete(`/devices/${id}`);
 
 export interface Monitor {
   id: string;
@@ -163,6 +255,37 @@ export const ignoreDiscoveryResult = (id: string) =>
 
 export const updatePrefixScanConfig = (id: string, body: { scan_enabled: boolean; scan_interval_seconds: number }) =>
   api.put<Prefix>(`/prefixes/${id}/scan-config`, body);
+
+export interface DiscoveryDiagnostics {
+  worker_count: number;
+  default_ports: number[];
+  tcp_timeout_ms: number;
+  ping_supported: boolean;
+  runtime: {
+    inside_container: boolean;
+    hostname: string;
+    routes?: string[];
+  };
+}
+
+export interface DiscoveryProbeRequest {
+  address: string;
+  ports?: number[];
+}
+
+export interface DiscoveryProbeResponse {
+  address: string;
+  seen: boolean;
+  open_ports: number[];
+  latency_ms: number;
+  reverse_dns: string;
+}
+
+export const getDiscoveryDiagnostics = () =>
+  api.get<DiscoveryDiagnostics>('/discovery/diagnostics');
+
+export const probeDiscoveryHost = (req: DiscoveryProbeRequest) =>
+  api.post<DiscoveryProbeResponse>('/discovery/probe', req);
 
 // Incidents
 export type IncidentStatus = 'open' | 'acknowledged' | 'resolved';

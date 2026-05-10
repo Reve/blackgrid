@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -50,6 +51,8 @@ type DiscoveryService struct {
 	maxIPv4PrefixSize int
 	tcpTimeoutMs      int
 	pingTimeoutMs     int
+	pingEnabled       bool
+	defaultPorts      []int
 	prober            Prober
 	bus               *events.EventBus
 
@@ -58,6 +61,54 @@ type DiscoveryService struct {
 	schedRunning   bool
 	schedLastTick  time.Time
 	runningScans   int
+}
+
+// WorkerCount returns the configured worker pool size.
+func (s *DiscoveryService) WorkerCount() int { return s.workers }
+
+// TCPTimeoutMs returns the configured per-port TCP timeout.
+func (s *DiscoveryService) TCPTimeoutMs() int { return s.tcpTimeoutMs }
+
+// DefaultPorts returns the configured default TCP probe ports.
+func (s *DiscoveryService) DefaultPorts() []int {
+	out := make([]int, len(s.defaultPorts))
+	copy(out, s.defaultPorts)
+	return out
+}
+
+// PingEnabled returns whether ICMP-assisted discovery is enabled.
+func (s *DiscoveryService) PingEnabled() bool { return s.pingEnabled }
+
+// ParsePortsList parses a comma-separated list of TCP ports. Ports must be in
+// [1, 65535]. Returns (ports, ok). ok is false when the input contains no
+// valid port numbers; callers should fall back to defaults in that case.
+func ParsePortsList(raw string) ([]int, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, false
+	}
+	seen := make(map[int]bool)
+	out := make([]int, 0, 8)
+	for _, part := range strings.Split(raw, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 1 || n > 65535 {
+			continue
+		}
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	sort.Ints(out)
+	return out, true
 }
 
 // DiscoveryStats is a snapshot of discovery service runtime state.
@@ -82,6 +133,16 @@ func (s *DiscoveryService) Stats() DiscoveryStats {
 
 func NewDiscoveryService(q *db.Queries, bus *events.EventBus) *DiscoveryService {
 	tcpTimeout := getEnvAsInt("DISCOVERY_TCP_TIMEOUT_MS", 750)
+
+	ports := append([]int(nil), DefaultPorts...)
+	if raw, ok := os.LookupEnv("DISCOVERY_DEFAULT_PORTS"); ok {
+		if parsed, ok := ParsePortsList(raw); ok {
+			ports = parsed
+		} else {
+			log.Printf("warning: DISCOVERY_DEFAULT_PORTS=%q produced no valid ports; falling back to defaults", raw)
+		}
+	}
+
 	s := &DiscoveryService{
 		q:                 q,
 		bus:               bus,
@@ -89,9 +150,26 @@ func NewDiscoveryService(q *db.Queries, bus *events.EventBus) *DiscoveryService 
 		maxIPv4PrefixSize: getEnvAsInt("DISCOVERY_MAX_IPV4_PREFIX_SIZE", 22),
 		tcpTimeoutMs:      tcpTimeout,
 		pingTimeoutMs:     getEnvAsInt("DISCOVERY_PING_TIMEOUT_MS", 750),
+		pingEnabled:       getEnvAsBool("DISCOVERY_ENABLE_PING", false),
+		defaultPorts:      ports,
 	}
-	s.prober = &TCPProber{TimeoutMs: tcpTimeout, Ports: DefaultPorts}
+	s.prober = &TCPProber{TimeoutMs: tcpTimeout, Ports: ports}
 	return s
+}
+
+func getEnvAsBool(key string, fallback bool) bool {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "t", "true", "yes", "on":
+		return true
+	case "0", "f", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }
 
 // SetProber overrides the prober (used by tests).
@@ -723,6 +801,43 @@ func (s *DiscoveryService) tickScheduled(ctx context.Context) {
 			log.Printf("scheduled scan for %s: %v", p.Prefix, err)
 		}
 	}
+}
+
+// ProbeAddress runs a one-off probe against the given address. The address
+// must fall inside one of the stored prefixes — arbitrary internet probing is
+// not allowed. Ports defaults to the service-configured DefaultPorts list when
+// nil/empty.
+func (s *DiscoveryService) ProbeAddress(ctx context.Context, address string, ports []int) (ProbeResult, error) {
+	addr, err := netip.ParseAddr(address)
+	if err != nil {
+		return ProbeResult{}, ErrInvalidCIDR
+	}
+
+	prefixes, err := s.q.GetPrefixes(ctx)
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	contained := false
+	for _, p := range prefixes {
+		netPrefix, perr := netip.ParsePrefix(p.Prefix)
+		if perr != nil {
+			continue
+		}
+		if netPrefix.Contains(addr) {
+			contained = true
+			break
+		}
+	}
+	if !contained {
+		return ProbeResult{}, ErrUnknownPrefix
+	}
+
+	usePorts := ports
+	if len(usePorts) == 0 {
+		usePorts = s.defaultPorts
+	}
+	prober := &TCPProber{TimeoutMs: s.tcpTimeoutMs, Ports: usePorts}
+	return prober.Probe(ctx, addr), nil
 }
 
 // ValidateScanInterval enforces the >= 60 second minimum.
