@@ -52,6 +52,32 @@ type DiscoveryService struct {
 	pingTimeoutMs     int
 	prober            Prober
 	bus               *events.EventBus
+
+	// runtime stats — read by the diagnostics handler.
+	statsMu        sync.RWMutex
+	schedRunning   bool
+	schedLastTick  time.Time
+	runningScans   int
+}
+
+// DiscoveryStats is a snapshot of discovery service runtime state.
+type DiscoveryStats struct {
+	SchedulerRunning bool      `json:"scheduler_running"`
+	LastTickAt       time.Time `json:"last_tick_at"`
+	WorkerCount      int       `json:"worker_count"`
+	RunningScans     int       `json:"running_scans"`
+}
+
+// Stats returns a snapshot of discovery state.
+func (s *DiscoveryService) Stats() DiscoveryStats {
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
+	return DiscoveryStats{
+		SchedulerRunning: s.schedRunning,
+		LastTickAt:       s.schedLastTick,
+		WorkerCount:      s.workers,
+		RunningScans:     s.runningScans,
+	}
 }
 
 func NewDiscoveryService(q *db.Queries, bus *events.EventBus) *DiscoveryService {
@@ -196,6 +222,15 @@ func (s *DiscoveryService) StartManualScan(ctx context.Context, prefixID pgtype.
 
 // RunScan executes a queued scan synchronously.
 func (s *DiscoveryService) RunScan(ctx context.Context, scanID pgtype.UUID) error {
+	s.statsMu.Lock()
+	s.runningScans++
+	s.statsMu.Unlock()
+	defer func() {
+		s.statsMu.Lock()
+		s.runningScans--
+		s.statsMu.Unlock()
+	}()
+
 	scan, err := s.q.GetDiscoveryScan(ctx, scanID)
 	if err != nil {
 		return err
@@ -653,6 +688,15 @@ func (s *DiscoveryService) RunScheduledScans(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
+	s.statsMu.Lock()
+	s.schedRunning = true
+	s.statsMu.Unlock()
+	defer func() {
+		s.statsMu.Lock()
+		s.schedRunning = false
+		s.statsMu.Unlock()
+	}()
+
 	s.tickScheduled(ctx)
 	for {
 		select {
@@ -665,6 +709,10 @@ func (s *DiscoveryService) RunScheduledScans(ctx context.Context) {
 }
 
 func (s *DiscoveryService) tickScheduled(ctx context.Context) {
+	s.statsMu.Lock()
+	s.schedLastTick = time.Now()
+	s.statsMu.Unlock()
+
 	prefixes, err := s.q.GetPrefixesForScheduledScans(ctx)
 	if err != nil {
 		log.Printf("scheduled scan: fetch prefixes: %v", err)

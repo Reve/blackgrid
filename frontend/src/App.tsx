@@ -4,7 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { EventProvider, useEvents } from './context/EventContext';
 import { ToastProvider } from './context/ToastContext';
 import { useEffect, useState } from 'react';
-import { getSetupStatus } from './api/client';
+import { getSetupStatus, getHealth } from './api/client';
 
 import Dashboard from './pages/Dashboard';
 import IPAM from './pages/IPAM';
@@ -24,6 +24,17 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { isConnected } = useEvents();
+  const [version, setVersion] = useState<string>('');
+  const [commit, setCommit] = useState<string>('');
+
+  useEffect(() => {
+    getHealth()
+      .then(r => {
+        setVersion(r.data.version || '');
+        setCommit(r.data.commit || '');
+      })
+      .catch(() => { /* health not available — leave version blank */ });
+  }, []);
 
   const navItems = [
     { path: '/', label: 'DASHBOARD' },
@@ -44,7 +55,12 @@ function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <span className="text-brand text-2xl font-bold tracking-[0.18em] font-display">BLACKGRID</span>
             <span className="text-accent-orange text-xs">■</span>
-            <span className="text-text-muted text-[10px] uppercase tracking-[0.2em] border border-line px-2 py-0.5">v0.1.0</span>
+            <span
+              className="text-text-muted text-[10px] uppercase tracking-[0.2em] border border-line px-2 py-0.5"
+              title={commit ? `commit ${commit}` : undefined}
+            >
+              {version || 'dev'}
+            </span>
           </div>
           <div className="flex items-center gap-4">
             <div className={`flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] ${isConnected ? 'text-brand' : 'text-signal-red'}`}>

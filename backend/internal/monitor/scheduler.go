@@ -27,6 +27,56 @@ type Scheduler struct {
 	wg          sync.WaitGroup
 	hook        IncidentHook
 	bus         *events.EventBus
+
+	// runtime stats — read by the diagnostics handler.
+	statsMu    sync.RWMutex
+	running    bool
+	lastTickAt time.Time
+}
+
+// Stats is a snapshot of scheduler runtime state for diagnostics.
+type Stats struct {
+	Running     bool      `json:"running"`
+	WorkerCount int       `json:"worker_count"`
+	LastTickAt  time.Time `json:"last_tick_at"`
+}
+
+// Stats returns the current scheduler stats. Safe to call from any goroutine.
+func (s *Scheduler) Stats() Stats {
+	s.statsMu.RLock()
+	defer s.statsMu.RUnlock()
+	return Stats{
+		Running:     s.running,
+		WorkerCount: s.workerCount,
+		LastTickAt:  s.lastTickAt,
+	}
+}
+
+// NextDueCheck returns the soonest expected next check timestamp across
+// enabled, non-paused monitors. It computes last_checked_at + interval per
+// monitor in-process, so callers should treat the value as approximate.
+// Returns zero time if there are no eligible monitors.
+func (s *Scheduler) NextDueCheck(ctx context.Context) (time.Time, error) {
+	monitors, err := s.queries.GetMonitors(ctx)
+	if err != nil {
+		return time.Time{}, err
+	}
+	var next time.Time
+	for _, m := range monitors {
+		if !m.Enabled || m.Status == "paused" {
+			continue
+		}
+		var due time.Time
+		if m.LastCheckedAt.Valid {
+			due = m.LastCheckedAt.Time.Add(time.Duration(m.IntervalSeconds) * time.Second)
+		} else {
+			due = time.Now()
+		}
+		if next.IsZero() || due.Before(next) {
+			next = due
+		}
+	}
+	return next, nil
 }
 
 func NewScheduler(queries *db.Queries, runner *Runner, workerCount int, bus *events.EventBus) *Scheduler {
@@ -47,6 +97,9 @@ func (s *Scheduler) SetIncidentHook(h IncidentHook) {
 }
 
 func (s *Scheduler) Start() {
+	s.statsMu.Lock()
+	s.running = true
+	s.statsMu.Unlock()
 	s.wg.Add(1)
 	go s.loop()
 }
@@ -54,6 +107,9 @@ func (s *Scheduler) Start() {
 func (s *Scheduler) Stop() {
 	close(s.stopChan)
 	s.wg.Wait()
+	s.statsMu.Lock()
+	s.running = false
+	s.statsMu.Unlock()
 }
 
 func (s *Scheduler) loop() {
@@ -79,6 +135,10 @@ func (s *Scheduler) loop() {
 			close(jobsChan)
 			return
 		case <-ticker.C:
+			s.statsMu.Lock()
+			s.lastTickAt = time.Now()
+			s.statsMu.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			monitors, err := s.queries.GetMonitorsDueForCheck(ctx)
 			cancel()

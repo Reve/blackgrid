@@ -117,6 +117,14 @@ func (b *EventBus) matches(event Event, filter EventFilter) bool {
 	return true
 }
 
+// SubscriberCount returns the number of currently connected subscribers.
+// Used by the diagnostics endpoint to expose active SSE client count.
+func (b *EventBus) SubscriberCount() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.subscribers)
+}
+
 func (b *EventBus) Shutdown() {
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -4,6 +4,7 @@ import { getIncidentCounts, getMonitors, listIncidents, listStatusPages } from '
 import { useEvents } from '../context/EventContext';
 import type { Event } from '../lib/events/types';
 import { Loading, ErrorState } from '../components/UI';
+import OnboardingChecklist from '../components/OnboardingChecklist';
 import type { ApiErrorDetail } from '../api/client';
 
 export default function Dashboard() {
@@ -80,6 +81,8 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-4 h-full overflow-auto">
       <h2 className="text-xl text-signal-green">System Overview</h2>
+
+      <OnboardingChecklist />
 
       <div className="grid grid-cols-4 gap-4">
         <Card label="Active Incidents" value={counts?.open_count ?? 0} accent="text-signal-red" />

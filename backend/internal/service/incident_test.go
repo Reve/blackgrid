@@ -249,6 +249,88 @@ func TestNotifierIsCalledOnOpen(t *testing.T) {
 	}
 }
 
+// TestNotifierIsNotCalledOnRepeatedOpen ensures that calling OpenForMonitor
+// repeatedly while an incident is already open does not produce additional
+// notification deliveries. This guards against a regression where every
+// failed monitor check would page the on-call channel until the incident
+// resolved.
+func TestNotifierIsNotCalledOnRepeatedOpen(t *testing.T) {
+	pool := newTestPool(t)
+	defer pool.Close()
+	requireSchema(t, pool)
+
+	q := db.New(pool)
+	svc := NewIncidentService(q, nil)
+	m := createTestMonitor(t, q)
+	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
+
+	mock := &mockNotifier{}
+	svc.SetNotifier(mock)
+
+	for i := 0; i < 5; i++ {
+		if _, _, err := svc.OpenForMonitor(context.Background(), m, "critical", "down", ""); err != nil {
+			t.Fatalf("open[%d]: %v", i, err)
+		}
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if atomic.LoadInt32(&mock.opened) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// allow late goroutine deliveries to settle
+	time.Sleep(100 * time.Millisecond)
+	if got := atomic.LoadInt32(&mock.opened); got != 1 {
+		t.Fatalf("expected SendIncidentOpened called exactly once across 5 OpenForMonitor calls, got %d", got)
+	}
+}
+
+// TestNotifierFiresOnceOnOpenAndOnceOnResolve verifies the contract that
+// notifications happen on incident opened and resolved transitions only —
+// not on intermediate status changes or repeated calls.
+func TestNotifierFiresOnceOnOpenAndOnceOnResolve(t *testing.T) {
+	pool := newTestPool(t)
+	defer pool.Close()
+	requireSchema(t, pool)
+
+	q := db.New(pool)
+	svc := NewIncidentService(q, nil)
+	m := createTestMonitor(t, q)
+	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
+
+	mock := &mockNotifier{}
+	svc.SetNotifier(mock)
+
+	if _, _, err := svc.OpenForMonitor(context.Background(), m, "critical", "down", ""); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	// Repeat opens (simulating sustained "down" checks) must not re-notify.
+	for i := 0; i < 3; i++ {
+		if _, _, err := svc.OpenForMonitor(context.Background(), m, "critical", "still down", ""); err != nil {
+			t.Fatalf("repeat open[%d]: %v", i, err)
+		}
+	}
+	if _, _, err := svc.ResolveForMonitor(context.Background(), m, "recovered"); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	// Repeat resolves must not re-notify either.
+	for i := 0; i < 3; i++ {
+		if _, _, err := svc.ResolveForMonitor(context.Background(), m, "still recovered"); err != nil {
+			t.Fatalf("repeat resolve[%d]: %v", i, err)
+		}
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	if got := atomic.LoadInt32(&mock.opened); got != 1 {
+		t.Fatalf("opened count: want 1, got %d", got)
+	}
+	if got := atomic.LoadInt32(&mock.resolved); got != 1 {
+		t.Fatalf("resolved count: want 1, got %d", got)
+	}
+}
+
 type mockNotifier struct {
 	opened   int32
 	resolved int32

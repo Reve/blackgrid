@@ -446,6 +446,45 @@ export const createApiToken = (data: CreateApiTokenRequest) =>
   api.post<CreateApiTokenResponse>('/api-tokens', data);
 export const deleteApiToken = (id: string) => api.delete(`/api-tokens/${id}`);
 
+export interface HealthInfo {
+  status: string;
+  version: string;
+  commit: string;
+  build_date: string;
+}
+
+export const getHealth = () => api.get<HealthInfo>('/health');
+
+export interface Diagnostics {
+  version: { version: string; commit: string; build_date: string };
+  database: { status: string; error: string };
+  monitor_scheduler: {
+    running: boolean;
+    worker_count: number;
+    last_tick_at: string | null;
+    next_due_at: string | null;
+  };
+  discovery_scheduler: {
+    running: boolean;
+    worker_count: number;
+    last_tick_at: string | null;
+    running_scans: number;
+  };
+  events: { sse_clients: number };
+  retention: {
+    monitor_results_days: number;
+    notification_deliveries_days: number;
+    audit_log_days: number;
+    discovery_results_days: number;
+    discovery_scans_days: number;
+    interval_hours: number;
+  };
+  current_user_role: string;
+  server_time: string;
+}
+
+export const getDiagnostics = () => api.get<Diagnostics>('/admin/diagnostics');
+
 export const listAuditLog = (params?: {
   actor_user_id?: string;
   action?: string;

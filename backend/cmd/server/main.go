@@ -327,6 +327,9 @@ func main() {
 		return c.JSON(http.StatusOK, map[string]string{"status": "scheduled"})
 	})
 
+	diagnosticsHandler := handlers.NewDiagnosticsHandler(pool, bus, monitorScheduler, discoverySvc, retentionCfg)
+	admin.GET("/diagnostics", diagnosticsHandler.Get)
+
 	// ---- Server start ----
 	go func() {
 		port := os.Getenv("PORT")

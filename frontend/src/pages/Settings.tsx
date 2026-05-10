@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import UsersTab from './UsersTab';
 import ApiTokensTab from './ApiTokensTab';
 import AuditLogTab from './AuditLogTab';
+import DiagnosticsTab from './DiagnosticsTab';
 
 interface FormState {
   id?: string;
@@ -94,7 +95,7 @@ function formToConfig(f: FormState): Record<string, any> {
   return cfg;
 }
 
-type TabId = 'channels' | 'users' | 'tokens' | 'audit';
+type TabId = 'channels' | 'users' | 'tokens' | 'audit' | 'diagnostics';
 
 export default function Settings() {
   const { isAdmin } = useAuth();
@@ -164,6 +165,7 @@ export default function Settings() {
     { id: 'users', label: 'USERS', adminOnly: true },
     { id: 'tokens', label: 'API TOKENS', adminOnly: true },
     { id: 'audit', label: 'AUDIT LOG', adminOnly: true },
+    { id: 'diagnostics', label: 'DIAGNOSTICS', adminOnly: true },
   ];
 
   return (
@@ -244,6 +246,7 @@ export default function Settings() {
       {tab === 'users' && isAdmin && <div className="panel"><UsersTab /></div>}
       {tab === 'tokens' && isAdmin && <div className="panel"><ApiTokensTab /></div>}
       {tab === 'audit' && isAdmin && <div className="panel"><AuditLogTab /></div>}
+      {tab === 'diagnostics' && isAdmin && <div className="panel"><DiagnosticsTab /></div>}
     </div>
   );
 }

@@ -44,6 +44,10 @@ Detailed documentation is available in the `docs` directory:
 - **[Notification Engine](docs/notifications.md)**: Webhooks, SMTP, and event payloads.
 - **[Status Pages](docs/status-pages.md)**: Public health pages and uptime calculation.
 - **[API Reference](docs/api.md)**: Full REST API documentation.
+- **[Known Limitations](docs/known-limitations.md)**: Deliberate MVP scope boundaries.
+- **[Release Checklist](docs/release-checklist.md)**: Pre-tag verification steps.
+- **[Backup Verification](docs/backup-verification.md)**: Restoring `.dump` files into a clean database.
+- **[Soak Test Plan](docs/soak-test.md)**: 24-hour reliability run-through.
 
 ## Development
 
