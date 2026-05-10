@@ -17,26 +17,26 @@ type scanReq struct {
 func (h *Handlers) StartScan(c echo.Context) error {
 	var req scanReq
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return Error(c, ErrCodeValidation, "invalid request", nil)
 	}
 
 	var prefixID pgtype.UUID
 	if err := prefixID.Scan(req.PrefixID); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid prefix_id"})
+		return Error(c, ErrCodeValidation, "invalid prefix_id", nil)
 	}
 
 	scan, err := h.DiscoveryService.StartManualScan(c.Request().Context(), prefixID)
 	if err != nil {
 		if errors.Is(err, service.ErrUnknownPrefix) || errors.Is(err, service.ErrInvalidCIDR) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeValidation, err.Error(), nil)
 		}
 		if errors.Is(err, service.ErrPrefixTooLarge) || errors.Is(err, service.ErrIPv6Unsupported) {
-			return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeValidation, err.Error(), nil)
 		}
 		if errors.Is(err, service.ErrScanAlreadyRunning) {
-			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeConflict, err.Error(), nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	return c.JSON(http.StatusCreated, scan)
@@ -45,21 +45,21 @@ func (h *Handlers) StartScan(c echo.Context) error {
 func (h *Handlers) StartPrefixScan(c echo.Context) error {
 	var prefixID pgtype.UUID
 	if err := prefixID.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id format"})
+		return Error(c, ErrCodeValidation, "invalid id format", nil)
 	}
 
 	scan, err := h.DiscoveryService.StartManualScan(c.Request().Context(), prefixID)
 	if err != nil {
 		if errors.Is(err, service.ErrUnknownPrefix) || errors.Is(err, service.ErrInvalidCIDR) {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeValidation, err.Error(), nil)
 		}
 		if errors.Is(err, service.ErrPrefixTooLarge) || errors.Is(err, service.ErrIPv6Unsupported) {
-			return c.JSON(http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeValidation, err.Error(), nil)
 		}
 		if errors.Is(err, service.ErrScanAlreadyRunning) {
-			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeConflict, err.Error(), nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	return c.JSON(http.StatusCreated, scan)
@@ -77,7 +77,7 @@ func (h *Handlers) GetScans(c echo.Context) error {
 
 	scans, err := h.DiscoveryService.ListScans(c.Request().Context(), prefixID, status, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if scans == nil {
@@ -90,12 +90,12 @@ func (h *Handlers) GetScans(c echo.Context) error {
 func (h *Handlers) GetScan(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id format"})
+		return Error(c, ErrCodeValidation, "invalid id format", nil)
 	}
 
 	scan, err := h.DiscoveryService.GetScan(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "scan not found"})
+		return Error(c, ErrCodeNotFound, "scan not found", nil)
 	}
 
 	return c.JSON(http.StatusOK, scan)
@@ -126,7 +126,7 @@ func (h *Handlers) GetDiscoveryResults(c echo.Context) error {
 
 	results, err := h.DiscoveryService.ListResults(c.Request().Context(), scanID, prefixID, classification, ignored, limit, offset)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if results == nil {
@@ -139,17 +139,17 @@ func (h *Handlers) GetDiscoveryResults(c echo.Context) error {
 func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id format"})
+		return Error(c, ErrCodeValidation, "invalid id format", nil)
 	}
 
 	var req service.AcceptResultInput
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return Error(c, ErrCodeValidation, "invalid request", nil)
 	}
 
 	ip, err := h.DiscoveryService.AcceptResult(c.Request().Context(), id, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	h.AuditService.Log(c.Request().Context(), service.AuditParams{
@@ -164,12 +164,12 @@ func (h *Handlers) AcceptDiscoveryResult(c echo.Context) error {
 func (h *Handlers) IgnoreDiscoveryResult(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id format"})
+		return Error(c, ErrCodeValidation, "invalid id format", nil)
 	}
 
 	res, err := h.DiscoveryService.IgnoreResult(c.Request().Context(), id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	return c.JSON(http.StatusOK, res)

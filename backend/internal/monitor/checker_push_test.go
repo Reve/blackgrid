@@ -14,7 +14,7 @@ func TestPushChecker(t *testing.T) {
 
 	t.Run("never checked", func(t *testing.T) {
 		m := db.Monitor{
-			LastCheckedAt: pgtype.Timestamptz{Valid: false},
+			LastHeartbeatAt: pgtype.Timestamptz{Valid: false},
 		}
 		res := c.Check(context.Background(), m)
 		if res.Status != "down" {
@@ -24,7 +24,7 @@ func TestPushChecker(t *testing.T) {
 
 	t.Run("within grace period", func(t *testing.T) {
 		m := db.Monitor{
-			LastCheckedAt: pgtype.Timestamptz{Time: time.Now().Add(-10 * time.Second), Valid: true},
+			LastHeartbeatAt: pgtype.Timestamptz{Time: time.Now().Add(-10 * time.Second), Valid: true},
 		}
 		// default grace is 120s
 		res := c.Check(context.Background(), m)
@@ -35,7 +35,7 @@ func TestPushChecker(t *testing.T) {
 
 	t.Run("overdue", func(t *testing.T) {
 		m := db.Monitor{
-			LastCheckedAt: pgtype.Timestamptz{Time: time.Now().Add(-300 * time.Second), Valid: true},
+			LastHeartbeatAt: pgtype.Timestamptz{Time: time.Now().Add(-300 * time.Second), Valid: true},
 		}
 		res := c.Check(context.Background(), m)
 		if res.Status != "down" || res.ErrorMessage != "heartbeat overdue" {

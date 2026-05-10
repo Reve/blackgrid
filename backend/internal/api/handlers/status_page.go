@@ -46,7 +46,7 @@ func (r statusPageRequest) toInput() service.StatusPageInput {
 func (h *StatusPageHandler) ListStatusPages(c echo.Context) error {
 	pages, err := h.svc.ListStatusPages(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, pages)
 }
@@ -54,7 +54,7 @@ func (h *StatusPageHandler) ListStatusPages(c echo.Context) error {
 func (h *StatusPageHandler) CreateStatusPage(c echo.Context) error {
 	var req statusPageRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return Error(c, ErrCodeValidation, "invalid body", nil)
 	}
 	page, err := h.svc.CreateStatusPage(c.Request().Context(), req.toInput())
 	if err != nil {
@@ -82,7 +82,7 @@ func (h *StatusPageHandler) UpdateStatusPage(c echo.Context) error {
 	}
 	var req statusPageRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return Error(c, ErrCodeValidation, "invalid body", nil)
 	}
 	page, err := h.svc.UpdateStatusPage(c.Request().Context(), id, req.toInput())
 	if err != nil {
@@ -115,11 +115,11 @@ func (h *StatusPageHandler) AttachMonitor(c echo.Context) error {
 	}
 	var req attachMonitorRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return Error(c, ErrCodeValidation, "invalid body", nil)
 	}
 	var monID pgtype.UUID
 	if err := monID.Scan(req.MonitorID); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid monitor_id"})
+		return Error(c, ErrCodeValidation, "invalid monitor_id", nil)
 	}
 	link, err := h.svc.AttachMonitor(c.Request().Context(), pageID, service.AttachMonitorInput{
 		MonitorID:    monID,
@@ -148,7 +148,7 @@ func (h *StatusPageHandler) UpdateAttachedMonitor(c echo.Context) error {
 	}
 	var req updateAttachedMonitorRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return Error(c, ErrCodeValidation, "invalid body", nil)
 	}
 	link, err := h.svc.UpdateAttachedMonitor(c.Request().Context(), pageID, monID, service.UpdateAttachedMonitorInput{
 		DisplayName:  req.DisplayName,
@@ -186,13 +186,13 @@ func (h *StatusPageHandler) ReorderMonitors(c echo.Context) error {
 	}
 	var req reorderRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return Error(c, ErrCodeValidation, "invalid body", nil)
 	}
 	ids := make([]pgtype.UUID, 0, len(req.MonitorIDs))
 	for _, s := range req.MonitorIDs {
 		var u pgtype.UUID
 		if err := u.Scan(s); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid monitor id: " + s})
+			return Error(c, ErrCodeValidation, "invalid monitor id: " + s, nil)
 		}
 		ids = append(ids, u)
 	}
@@ -208,9 +208,9 @@ func (h *StatusPageHandler) PublicStatusPage(c echo.Context) error {
 	page, err := h.svc.GetPublicStatusPage(c.Request().Context(), slug)
 	if err != nil {
 		if errors.Is(err, service.ErrStatusPageNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "status page not found"})
+			return Error(c, ErrCodeNotFound, "status page not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, page)
 }
@@ -220,7 +220,7 @@ func (h *StatusPageHandler) PublicStatusPage(c echo.Context) error {
 func parseUUIDParam(c echo.Context, name string) (pgtype.UUID, bool) {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param(name)); err != nil {
-		_ = c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid " + name})
+		_ = Error(c, ErrCodeValidation, "invalid " + name, nil)
 		return id, false
 	}
 	return id, true
@@ -229,18 +229,18 @@ func parseUUIDParam(c echo.Context, name string) (pgtype.UUID, bool) {
 func statusPageError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, service.ErrStatusPageNotFound):
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "status page not found"})
+		return Error(c, ErrCodeNotFound, "status page not found", nil)
 	case errors.Is(err, service.ErrStatusPageDuplicateSlug):
-		return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeConflict, err.Error(), nil)
 	case errors.Is(err, service.ErrStatusPageInvalidSlug),
 		errors.Is(err, service.ErrStatusPageNameRequired),
 		errors.Is(err, service.ErrReorderMonitorMismatched):
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	case errors.Is(err, service.ErrMonitorAlreadyAttached):
-		return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeConflict, err.Error(), nil)
 	case errors.Is(err, service.ErrMonitorNotAttached):
-		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeNotFound, err.Error(), nil)
 	default:
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 }

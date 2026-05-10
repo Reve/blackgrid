@@ -340,3 +340,88 @@ Generates a new token for a push monitor. Returns the plaintext token once.
   "push_url": "/push/..."
 }
 ```
+
+## IPAM endpoints
+
+The currently implemented IPAM surface is:
+
+### Prefixes
+
+- `GET /api/v1/prefixes`
+- `GET /api/v1/prefixes/{id}`
+- `GET /api/v1/prefixes/{id}/addresses` — all `ip_addresses` recorded under this prefix.
+- `GET /api/v1/prefixes/{id}/utilization` — returns `{prefix_id, prefix, total_hosts, allocated, free, percent_used}`. `total_hosts` is the addressable host count (network and broadcast excluded for IPv4 prefixes shorter than `/31`). `allocated` counts rows with `status != "available"`.
+- `GET /api/v1/prefixes/{id}/next-ip`
+- `GET /api/v1/prefixes/{id}/next-available` — alias for `next-ip`, matching the original phased spec name.
+- `POST /api/v1/prefixes` (operator)
+- `PUT /api/v1/prefixes/{id}` (operator)
+- `PUT /api/v1/prefixes/{id}/scan-config` (operator)
+- `DELETE /api/v1/prefixes/{id}` (operator)
+- `POST /api/v1/prefixes/{id}/scan` (operator) — kick a discovery scan for this prefix.
+
+### IP addresses
+
+- `GET /api/v1/ip-addresses`
+- `GET /api/v1/ip-addresses/{id}`
+- `POST /api/v1/ip-addresses` (operator)
+- `PUT /api/v1/ip-addresses/{id}` (operator)
+- `POST /api/v1/ip-addresses/{id}/reserve` (operator) — sets `status` to `reserved`.
+- `POST /api/v1/ip-addresses/{id}/assign` (operator) — sets `status` to `assigned`.
+- `POST /api/v1/ip-addresses/{id}/release` (operator) — sets `status` back to `available`.
+- `DELETE /api/v1/ip-addresses/{id}` (operator)
+
+### Devices
+
+- `GET /api/v1/devices`
+- `GET /api/v1/devices/{id}`
+- `POST /api/v1/devices` (operator)
+- `PUT /api/v1/devices/{id}` (operator)
+- `DELETE /api/v1/devices/{id}` (operator)
+
+### Intentional deviations from the original phased plan
+
+- `GET /api/v1/devices/{id}/interfaces` and `POST /api/v1/devices/{id}/interfaces` are **not implemented**. The current schema does not model a standalone `device_interfaces` table; interface metadata, where present, is referenced only as a `interface_id` column on `ip_addresses`. Adding first-class interface management would require a new table and is deferred until a use-case demands it.
+- The original spec listed `GET /prefixes/{id}/next-available`; the implementation also accepts the legacy name `GET /prefixes/{id}/next-ip` so older clients keep working. Both routes return the same body.
+- `reserve` / `assign` / `release` are thin wrappers around `UpdateIPAddressStatus`. They accept no body. They are idempotent — calling `release` on an already-available address is a no-op.
+
+## Error envelope
+
+All non-2xx API responses use the common envelope:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "human-readable message",
+    "request_id": "...",
+    "details": {}
+  }
+}
+```
+
+Error codes used:
+
+| HTTP | `code` |
+| --- | --- |
+| 400 | `validation_error` |
+| 401 | `unauthorized` |
+| 403 | `forbidden` |
+| 404 | `not_found` |
+| 409 | `conflict` |
+| 429 | `rate_limited` |
+| 500 | `internal_error` |
+| 503 | `service_unavailable` |
+
+500 responses never leak raw database error strings; the message is always a generic `"internal error"` and the underlying error is logged server-side.
+
+## Pagination on `/monitors/{id}/results`
+
+`GET /api/v1/monitors/{id}/results` accepts `limit` (default `100`, max `1000`) and `offset` (default `0`) as query parameters. Results are returned ordered by `checked_at` descending.
+
+## Push monitor heartbeat semantics
+
+Push monitors use a dedicated `last_heartbeat_at` column on `monitors` (added in migration `007_push_heartbeat.sql`).
+
+- `POST /push/{token}` (or `GET /push/{token}`) updates `last_heartbeat_at` to "now". An optional `status=up|down|degraded` query param or JSON body field overrides the default `up`.
+- The scheduled overdue check compares `now() - last_heartbeat_at` against `grace_seconds`. It does **not** read `last_checked_at`, so the scheduler running an overdue check never makes a missing-heartbeat monitor look healthy.
+- Pushed `down`/`degraded` and scheduled overdue both flow through the same `IncidentHook`, so they create incidents identically. Pushed `up` after a `down` resolves the open incident and triggers the same notification path as a scheduled recovery.

@@ -76,7 +76,7 @@ func TestIncidentLifecycle_OpensAndDoesNotDuplicate(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 
 	inc1, created1, err := svc.OpenForMonitor(context.Background(), m, "critical", "down", "")
@@ -109,7 +109,7 @@ func TestIncidentLifecycle_ResolveOnRecovery(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -137,7 +137,7 @@ func TestIncidentLifecycle_ResolvesAcknowledged(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -165,7 +165,7 @@ func TestIncidentLifecycle_NewIncidentAfterRecovery(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -186,7 +186,7 @@ func TestAcknowledgeResolvedReturnsError(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -204,7 +204,7 @@ func TestResolveAlreadyResolvedIsIdempotent(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -227,7 +227,7 @@ func TestNotifierIsCalledOnOpen(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewIncidentService(q)
+	svc := NewIncidentService(q, nil)
 	m := createTestMonitor(t, q)
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM incidents WHERE monitor_id=$1", m.ID) })
 
@@ -274,7 +274,7 @@ func TestNotificationDelivery_WebhookFailureStored(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewNotificationService(q)
+	svc := NewNotificationService(q, nil)
 	svc.SetHTTPClient(srv.Client())
 
 	// Create a webhook channel.
@@ -318,7 +318,7 @@ func TestNotificationDelivery_OneFailureDoesNotBlockOthers(t *testing.T) {
 	}))
 	defer successSrv.Close()
 
-	svc := NewNotificationService(q)
+	svc := NewNotificationService(q, nil)
 	svc.SetHTTPClient(http.DefaultClient)
 
 	failCh, _ := svc.CreateChannel(context.Background(), "fail", ChannelTypeWebhook, true,

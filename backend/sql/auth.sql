@@ -82,16 +82,16 @@ DELETE FROM api_tokens WHERE id = $1;
 
 -- name: CreateAuditLog :one
 INSERT INTO audit_log (action, entity_type, entity_id, changes, actor_user_id, actor_type, actor_api_token_id, request_id, ip_address, object_type, object_id, before_state, after_state)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::inet, $10, $11, $12, $13)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING id, action, entity_type, entity_id, changes, actor_user_id, actor_type, actor_api_token_id, request_id, ip_address, object_type, object_id, before_state, after_state, created_at;
 
 -- name: ListAuditLogs :many
 SELECT id, action, entity_type, entity_id, changes, actor_user_id, actor_type, actor_api_token_id, request_id, ip_address, object_type, object_id, before_state, after_state, created_at
 FROM audit_log
 WHERE
-    ($1::uuid IS NULL OR actor_user_id = $1)
-    AND ($2::text IS NULL OR action = $2)
-    AND ($3::text IS NULL OR object_type = $3)
-    AND ($4::uuid IS NULL OR object_id = $4)
+    (sqlc.narg(actor_user_id)::uuid IS NULL OR actor_user_id = sqlc.narg(actor_user_id))
+    AND (sqlc.narg(action)::text IS NULL OR action = sqlc.narg(action))
+    AND (sqlc.narg(object_type)::text IS NULL OR object_type = sqlc.narg(object_type))
+    AND (sqlc.narg(object_id)::uuid IS NULL OR object_id = sqlc.narg(object_id))
 ORDER BY created_at DESC
-LIMIT $5 OFFSET $6;
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);

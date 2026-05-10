@@ -80,7 +80,7 @@ type channelRequest struct {
 func (h *NotificationHandler) ListChannels(c echo.Context) error {
 	channels, err := h.svc.ListChannels(c.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	resp := make([]channelResponse, 0, len(channels))
 	for _, ch := range channels {
@@ -92,14 +92,14 @@ func (h *NotificationHandler) ListChannels(c echo.Context) error {
 func (h *NotificationHandler) GetChannel(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 	ch, err := h.svc.GetChannel(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrChannelNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "channel not found"})
+			return Error(c, ErrCodeNotFound, "channel not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, toChannelResponse(ch))
 }
@@ -107,7 +107,7 @@ func (h *NotificationHandler) GetChannel(c echo.Context) error {
 func (h *NotificationHandler) CreateChannel(c echo.Context) error {
 	var req channelRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 	enabled := true
 	if req.Enabled != nil {
@@ -119,7 +119,7 @@ func (h *NotificationHandler) CreateChannel(c echo.Context) error {
 
 	ch, err := h.svc.CreateChannel(c.Request().Context(), req.Name, req.ChannelType, enabled, req.Config)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 	return c.JSON(http.StatusCreated, toChannelResponse(ch))
 }
@@ -127,20 +127,20 @@ func (h *NotificationHandler) CreateChannel(c echo.Context) error {
 func (h *NotificationHandler) UpdateChannel(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 
 	existing, err := h.svc.GetChannel(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrChannelNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "channel not found"})
+			return Error(c, ErrCodeNotFound, "channel not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	var req channelRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 
 	name := existing.Name
@@ -162,7 +162,7 @@ func (h *NotificationHandler) UpdateChannel(c echo.Context) error {
 
 	ch, err := h.svc.UpdateChannel(c.Request().Context(), id, name, channelType, enabled, config)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 	return c.JSON(http.StatusOK, toChannelResponse(ch))
 }
@@ -170,10 +170,10 @@ func (h *NotificationHandler) UpdateChannel(c echo.Context) error {
 func (h *NotificationHandler) DeleteChannel(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 	if err := h.svc.DeleteChannel(c.Request().Context(), id); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -181,15 +181,15 @@ func (h *NotificationHandler) DeleteChannel(c echo.Context) error {
 func (h *NotificationHandler) TestChannel(c echo.Context) error {
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 
 	delivery, err := h.svc.TestChannel(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, service.ErrChannelNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "channel not found"})
+			return Error(c, ErrCodeNotFound, "channel not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	resp := map[string]any{

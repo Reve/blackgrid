@@ -136,6 +136,7 @@ type Monitor struct {
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
 	PushTokenHash      pgtype.Text        `json:"push_token_hash"`
+	LastHeartbeatAt    pgtype.Timestamptz `json:"last_heartbeat_at"`
 }
 
 type MonitorResult struct {

@@ -42,7 +42,7 @@ func (h *IncidentHandler) ListIncidents(c echo.Context) error {
 	var monitorID pgtype.UUID
 	if v := c.QueryParam("monitor_id"); v != "" {
 		if err := monitorID.Scan(v); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid monitor_id"})
+			return Error(c, ErrCodeValidation, "invalid monitor_id", nil)
 		}
 	}
 
@@ -54,7 +54,7 @@ func (h *IncidentHandler) ListIncidents(c echo.Context) error {
 		Offset:    offset,
 	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, incidents)
 }
@@ -63,15 +63,15 @@ func (h *IncidentHandler) GetIncident(c echo.Context) error {
 	ctx := c.Request().Context()
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 
 	inc, err := h.svc.Get(ctx, id)
 	if err != nil {
 		if errors.Is(err, service.ErrIncidentNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "incident not found"})
+			return Error(c, ErrCodeNotFound, "incident not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, inc)
 }
@@ -84,7 +84,7 @@ func (h *IncidentHandler) AcknowledgeIncident(c echo.Context) error {
 	ctx := c.Request().Context()
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 
 	var req incidentNoteRequest
@@ -94,11 +94,11 @@ func (h *IncidentHandler) AcknowledgeIncident(c echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrIncidentNotFound):
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "incident not found"})
+			return Error(c, ErrCodeNotFound, "incident not found", nil)
 		case errors.Is(err, service.ErrIncidentAlreadyResolved):
-			return c.JSON(http.StatusConflict, map[string]string{"error": "incident is already resolved"})
+			return Error(c, ErrCodeConflict, "incident is already resolved", nil)
 		default:
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return Error(c, ErrCodeInternal, "internal error", nil)
 		}
 	}
 	return c.JSON(http.StatusOK, inc)
@@ -108,7 +108,7 @@ func (h *IncidentHandler) ResolveIncident(c echo.Context) error {
 	ctx := c.Request().Context()
 	var id pgtype.UUID
 	if err := id.Scan(c.Param("id")); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id"})
+		return Error(c, ErrCodeValidation, "invalid id", nil)
 	}
 
 	var req incidentNoteRequest
@@ -117,9 +117,9 @@ func (h *IncidentHandler) ResolveIncident(c echo.Context) error {
 	inc, err := h.svc.Resolve(ctx, id, req.Note)
 	if err != nil {
 		if errors.Is(err, service.ErrIncidentNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "incident not found"})
+			return Error(c, ErrCodeNotFound, "incident not found", nil)
 		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, inc)
 }
@@ -128,7 +128,7 @@ func (h *IncidentHandler) IncidentCounts(c echo.Context) error {
 	ctx := c.Request().Context()
 	counts, err := h.svc.Counts(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	return c.JSON(http.StatusOK, counts)
 }

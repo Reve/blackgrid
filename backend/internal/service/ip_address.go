@@ -79,3 +79,30 @@ func (s *IPAddressService) DeleteIPAddress(ctx context.Context, id pgtype.UUID) 
 	}
 	return err
 }
+
+// GetIPAddressesByPrefix returns all IP addresses recorded under a prefix.
+func (s *IPAddressService) GetIPAddressesByPrefix(ctx context.Context, prefixID pgtype.UUID) ([]db.IpAddress, error) {
+	ips, err := s.q.GetIPAddressesByPrefix(ctx, prefixID)
+	if err != nil {
+		return nil, err
+	}
+	if ips == nil {
+		ips = []db.IpAddress{}
+	}
+	return ips, nil
+}
+
+// SetStatus updates only the status of an IP address. Used for the
+// reserve/assign/release workflow endpoints.
+func (s *IPAddressService) SetStatus(ctx context.Context, id pgtype.UUID, status string) (db.IpAddress, error) {
+	ip, err := s.q.UpdateIPAddressStatus(ctx, db.UpdateIPAddressStatusParams{ID: id, Status: pgtype.Text{String: status, Valid: true}})
+	if err == nil && s.bus != nil {
+		s.bus.Publish(ctx, events.Event{
+			Type:       events.IPAMIPAddressChanged,
+			ObjectType: "ip_address",
+			ObjectID:   events.FormatUUID(id),
+			Payload:    map[string]any{"action": "status_changed", "status": status},
+		})
+	}
+	return ip, err
+}

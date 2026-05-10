@@ -120,6 +120,18 @@ ORDER BY last_checked_at ASC NULLS FIRST;
 -- name: GetMonitorResults :many
 SELECT * FROM monitor_results WHERE monitor_id = $1 ORDER BY checked_at DESC LIMIT $2 OFFSET $3;
 
+-- name: GetMonitorByPushTokenHash :one
+SELECT * FROM monitors WHERE push_token_hash = $1 LIMIT 1;
+
+-- name: RecordPushHeartbeat :one
+UPDATE monitors
+SET last_heartbeat_at = $2,
+    last_checked_at = $2,
+    status = $3,
+    last_status_change_at = $4,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 RETURNING *;
+
 -- name: CreateMonitorResult :one
 INSERT INTO monitor_results (monitor_id, status, latency_ms, error_message, details)
 VALUES ($1, $2, $3, $4, $5) RETURNING *;

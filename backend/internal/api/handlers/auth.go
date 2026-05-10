@@ -327,11 +327,11 @@ func (h *AuthHandler) DeleteAPIToken(c echo.Context) error {
 
 func (h *AuthHandler) ListAuditLog(c echo.Context) error {
 	var params db.ListAuditLogsParams
-	params.Limit = 100
+	params.Lim = 100
 	if v := c.QueryParam("limit"); v != "" {
-		params.Limit = parseIntDefault(v, 100)
+		params.Lim = parseIntDefault(v, 100)
 	}
-	params.Offset = parseIntDefault(c.QueryParam("offset"), 0)
+	params.Off = parseIntDefault(c.QueryParam("offset"), 0)
 	if v := c.QueryParam("actor_user_id"); v != "" {
 		if uid, err := parseUUID(v); err == nil {
 			params.ActorUserID = uid

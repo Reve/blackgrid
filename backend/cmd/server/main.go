@@ -125,10 +125,12 @@ func main() {
 
 	monitorRunner := monitor.NewRunner(queries)
 	monitorScheduler := monitor.NewScheduler(queries, monitorRunner, 10, bus)
-	monitorScheduler.SetIncidentHook(service.NewIncidentHook(incidentSvc))
+	incidentHook := service.NewIncidentHook(incidentSvc)
+	monitorScheduler.SetIncidentHook(incidentHook)
 	monitorScheduler.Start()
 
 	monitorHandler := handlers.NewMonitorHandler(queries, monitorRunner, auditSvc, bus)
+	monitorHandler.SetIncidentHook(incidentHook)
 	incidentHandler := handlers.NewIncidentHandler(incidentSvc)
 	notificationHandler := handlers.NewNotificationHandler(notificationSvc)
 
@@ -210,6 +212,9 @@ func main() {
 	api.GET("/prefixes", h.GetPrefixes)
 	api.GET("/prefixes/:id", h.GetPrefix)
 	api.GET("/prefixes/:id/next-ip", h.GetNextAvailableIP)
+	api.GET("/prefixes/:id/next-available", h.GetNextAvailableIP) // alias matching the planned spec
+	api.GET("/prefixes/:id/addresses", h.GetPrefixAddresses)
+	api.GET("/prefixes/:id/utilization", h.GetPrefixUtilization)
 	api.POST("/prefixes", h.CreatePrefix, operatorMW)
 	api.PUT("/prefixes/:id", h.UpdatePrefix, operatorMW)
 	api.PUT("/prefixes/:id/scan-config", h.UpdatePrefixScanConfig, operatorMW)
@@ -221,6 +226,9 @@ func main() {
 	api.GET("/ip-addresses/:id", h.GetIPAddress)
 	api.POST("/ip-addresses", h.CreateIPAddress, operatorMW)
 	api.PUT("/ip-addresses/:id", h.UpdateIPAddress, operatorMW)
+	api.POST("/ip-addresses/:id/reserve", h.ReserveIPAddress, operatorMW)
+	api.POST("/ip-addresses/:id/assign", h.AssignIPAddress, operatorMW)
+	api.POST("/ip-addresses/:id/release", h.ReleaseIPAddress, operatorMW)
 	api.DELETE("/ip-addresses/:id", h.DeleteIPAddress, operatorMW)
 
 	// Devices

@@ -72,7 +72,7 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 
 const createAuditLog = `-- name: CreateAuditLog :one
 INSERT INTO audit_log (action, entity_type, entity_id, changes, actor_user_id, actor_type, actor_api_token_id, request_id, ip_address, object_type, object_id, before_state, after_state)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::inet, $10, $11, $12, $13)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 RETURNING id, action, entity_type, entity_id, changes, actor_user_id, actor_type, actor_api_token_id, request_id, ip_address, object_type, object_id, before_state, after_state, created_at
 `
 
@@ -85,7 +85,7 @@ type CreateAuditLogParams struct {
 	ActorType       pgtype.Text `json:"actor_type"`
 	ActorApiTokenID pgtype.UUID `json:"actor_api_token_id"`
 	RequestID       pgtype.Text `json:"request_id"`
-	IpAddress       netip.Addr  `json:"ip_address"`
+	IpAddress       *netip.Addr `json:"ip_address"`
 	ObjectType      pgtype.Text `json:"object_type"`
 	ObjectID        pgtype.UUID `json:"object_id"`
 	BeforeState     []byte      `json:"before_state"`
@@ -394,7 +394,7 @@ WHERE
     AND ($3::text IS NULL OR object_type = $3)
     AND ($4::uuid IS NULL OR object_id = $4)
 ORDER BY created_at DESC
-LIMIT $5 OFFSET $6
+LIMIT $6 OFFSET $5
 `
 
 type ListAuditLogsParams struct {
@@ -402,8 +402,8 @@ type ListAuditLogsParams struct {
 	Action      pgtype.Text `json:"action"`
 	ObjectType  pgtype.Text `json:"object_type"`
 	ObjectID    pgtype.UUID `json:"object_id"`
-	Limit   int32       `json:"limit"`
-	Offset  int32       `json:"offset"`
+	Off         int32       `json:"off"`
+	Lim         int32       `json:"lim"`
 }
 
 type ListAuditLogsRow struct {
@@ -430,8 +430,8 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 		arg.Action,
 		arg.ObjectType,
 		arg.ObjectID,
-		arg.Limit,
-		arg.Offset,
+		arg.Off,
+		arg.Lim,
 	)
 	if err != nil {
 		return nil, err

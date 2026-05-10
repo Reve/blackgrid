@@ -11,8 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// IncidentHook is invoked after a scheduled monitor check completes so that
-// callers (e.g. the incident service) can react to status transitions.
+// IncidentHook is invoked after a monitor check completes so that callers
+// (e.g. the incident service) can react to status transitions. The same hook
+// is reused by the push heartbeat handler so push and scheduled status
+// changes flow through the same incident lifecycle.
 type IncidentHook interface {
 	OnScheduledStatusChange(ctx context.Context, monitor db.Monitor, oldStatus, newStatus string)
 }

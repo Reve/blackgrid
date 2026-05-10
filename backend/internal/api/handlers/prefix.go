@@ -111,3 +111,30 @@ func (h *Handlers) GetNextAvailableIP(c echo.Context) error {
 		"ip_address": ip,
 	})
 }
+
+// GetPrefixAddresses returns all IP addresses recorded under a prefix.
+func (h *Handlers) GetPrefixAddresses(c echo.Context) error {
+	var id pgtype.UUID
+	if err := id.Scan(c.Param("id")); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+	ips, err := h.IPAddressService.GetIPAddressesByPrefix(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.JSON(http.StatusOK, ips)
+}
+
+// GetPrefixUtilization summarises usage of a prefix: total, allocated, free,
+// and percent. "allocated" counts any address whose status is not "available".
+func (h *Handlers) GetPrefixUtilization(c echo.Context) error {
+	var id pgtype.UUID
+	if err := id.Scan(c.Param("id")); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
+	}
+	util, err := h.PrefixService.Utilization(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	}
+	return c.JSON(http.StatusOK, util)
+}

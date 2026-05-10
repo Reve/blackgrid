@@ -36,10 +36,10 @@ func TestStatusPage_CreateGeneratesSlug(t *testing.T) {
 	defer pool.Close()
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{
-		Name: "Homelab Core Services " + time.Now().Format("150405.000000"),
+		Name: "Homelab Core Services " + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", ""),
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -59,9 +59,9 @@ func TestStatusPage_DuplicateSlugRejected(t *testing.T) {
 	defer pool.Close()
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	slug := "dup-" + time.Now().Format("150405.000000")
+	slug := "dup-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
 	p1, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "page1", Slug: slug})
 	if err != nil {
 		t.Fatalf("create1: %v", err)
@@ -79,7 +79,7 @@ func TestStatusPage_InvalidSlugRejected(t *testing.T) {
 	defer pool.Close()
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	_, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "x", Slug: "Invalid Slug!"})
 	if err != ErrStatusPageInvalidSlug {
@@ -92,10 +92,10 @@ func TestStatusPage_UpdateAndDelete(t *testing.T) {
 	defer pool.Close()
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{
-		Name: "page-" + time.Now().Format("150405.000000"),
+		Name: "page-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", ""),
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -125,10 +125,10 @@ func TestStatusPage_DeleteCascadesMonitorLinks(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	m := createTestMonitor(t, q)
-	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + time.Now().Format("150405.000000")})
+	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -153,9 +153,9 @@ func TestStatusPage_AttachAndDuplicate(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + time.Now().Format("150405.000000")})
+	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -183,9 +183,9 @@ func TestStatusPage_ReorderRejectsUnattached(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + time.Now().Format("150405.000000")})
+	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")})
 	cleanupStatusPage(t, svc, page.ID)
 
 	m1 := createTestMonitor(t, q)
@@ -204,9 +204,9 @@ func TestStatusPage_ReorderUpdatesOrder(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + time.Now().Format("150405.000000")})
+	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{Name: "p-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")})
 	cleanupStatusPage(t, svc, page.ID)
 
 	m1 := createTestMonitor(t, q)
@@ -261,9 +261,9 @@ func TestStatusPage_PrivateNotExposedPublicly(t *testing.T) {
 	defer pool.Close()
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	slug := "priv-" + time.Now().Format("150405.000000")
+	slug := "priv-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
 	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{
 		Name: "Private", Slug: slug, Public: ptrBool(false),
 	})
@@ -283,9 +283,9 @@ func TestStatusPage_PublicReturnsAttachedInOrder(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
-	slug := "pub-" + time.Now().Format("150405.000000")
+	slug := "pub-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
 	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{
 		Name: "Public", Slug: slug, Public: ptrBool(true), ShowIncidents: ptrBool(false),
 	})
@@ -317,7 +317,7 @@ func TestStatusPage_UptimeNoResultsReturnsNil(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	m := createTestMonitor(t, q)
 	u, err := svc.ComputeMonitorUptime(context.Background(), m.ID, 24*60*60)
@@ -335,7 +335,7 @@ func TestStatusPage_UptimePercentage(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 
 	m := createTestMonitor(t, q)
 	ctx := context.Background()
@@ -374,10 +374,10 @@ func TestStatusPage_PublicIncidentsForAttachedOnly(t *testing.T) {
 	q := db.New(pool)
 	requireStatusPageSchema(t, q)
 	requireSchema(t, pool)
-	svc := NewStatusPageService(q)
-	incSvc := NewIncidentService(q)
+	svc := NewStatusPageService(q, nil)
+	incSvc := NewIncidentService(q, nil)
 
-	slug := "incs-" + time.Now().Format("150405.000000")
+	slug := "incs-" + strings.ReplaceAll(time.Now().Format("150405.000000"), ".", "")
 	page, _ := svc.CreateStatusPage(context.Background(), StatusPageInput{
 		Name: "P", Slug: slug, Public: ptrBool(true),
 	})

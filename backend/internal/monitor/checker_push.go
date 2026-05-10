@@ -16,9 +16,9 @@ type PushConfig struct {
 }
 
 // PushChecker implements the passive overdue check for push monitors.
-// When called by the scheduler the monitor's last_checked_at tells us
-// when the last heartbeat was received. If now - last_checked_at > grace_seconds
-// the monitor is considered overdue → down.
+// It compares now against last_heartbeat_at — *not* last_checked_at, which
+// is bumped by the scheduler itself whenever it evaluates this monitor.
+// If now - last_heartbeat_at > grace_seconds the monitor is overdue → down.
 type PushChecker struct{}
 
 func (c *PushChecker) Check(ctx context.Context, m db.Monitor) CheckResult {
@@ -32,7 +32,7 @@ func (c *PushChecker) Check(ctx context.Context, m db.Monitor) CheckResult {
 		grace = 120
 	}
 
-	if !m.LastCheckedAt.Valid {
+	if !m.LastHeartbeatAt.Valid {
 		// Never received a heartbeat
 		return CheckResult{
 			Status:       "down",
@@ -43,7 +43,7 @@ func (c *PushChecker) Check(ctx context.Context, m db.Monitor) CheckResult {
 		}
 	}
 
-	elapsed := time.Since(m.LastCheckedAt.Time)
+	elapsed := time.Since(m.LastHeartbeatAt.Time)
 	if elapsed > time.Duration(grace)*time.Second {
 		return CheckResult{
 			Status:       "down",

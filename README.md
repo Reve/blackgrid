@@ -67,3 +67,9 @@ Contributions are welcome! Please see the contribution guidelines (coming soon) 
 ## License
 
 MIT
+
+## API conformance notes
+
+The HTTP API uses a single error envelope and a documented IPAM surface. See [docs/api.md](docs/api.md) for the full reference and the list of intentional deviations from the original phased plan (notably: device interfaces are not modelled as standalone resources; `next-ip` is exposed alongside `next-available` as a compatibility alias).
+
+Push monitors use a dedicated `last_heartbeat_at` column. The scheduler's overdue check compares against that field, not `last_checked_at`, so a scheduled evaluation never masks a missing heartbeat. Push status changes flow through the same incident lifecycle hook as scheduled status changes.

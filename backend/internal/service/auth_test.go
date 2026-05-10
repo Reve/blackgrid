@@ -41,8 +41,8 @@ func TestSetup_RequiredWhenNoUsers(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	required, err := svc.SetupRequired(context.Background())
@@ -60,8 +60,8 @@ func TestSetup_NotRequiredWhenUserExists(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	_, err := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -80,8 +80,8 @@ func TestSetup_FirstAdminCreation(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	user, err := svc.CreateFirstAdmin(context.Background(), "admin@setup.local", "Admin", "securepassword123")
@@ -102,8 +102,8 @@ func TestSetup_FirstAdminBlockedAfterUserExists(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	_, _ = svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -121,8 +121,8 @@ func TestAuth_LoginSuccess(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 24}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 24}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	email := authTestEmail()
@@ -157,8 +157,8 @@ func TestAuth_LoginFailureDoesNotRevealUserExistence(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	// Wrong email — user doesn't exist
@@ -183,8 +183,8 @@ func TestAuth_DisabledUserCannotLogin(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	email := authTestEmail()
@@ -211,8 +211,8 @@ func TestAuth_LogoutDeletesSession(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	email := authTestEmail()
@@ -234,8 +234,8 @@ func TestAuth_PasswordHashNotReturnedInJSON(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	user, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "A", "securepassword123")
@@ -257,8 +257,8 @@ func TestUser_CannotDeleteLastEnabledAdmin(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -275,8 +275,8 @@ func TestUser_CannotDisableLastEnabledAdmin(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -294,8 +294,8 @@ func TestUser_CannotDemoteLastEnabledAdmin(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -315,8 +315,8 @@ func TestAPIToken_CreateAndResolve(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -351,8 +351,8 @@ func TestAPIToken_ExpiredTokenRejected(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -373,8 +373,8 @@ func TestAPIToken_DeleteInvalidates(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -396,8 +396,8 @@ func TestAPIToken_TokenRoleCannotExceedOwner(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -421,14 +421,14 @@ func TestAudit_UserCreateWritesLog(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	_, _ = svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
 	time.Sleep(300 * time.Millisecond)
 
-	entries, err := audit.List(context.Background(), db.ListAuditLogsParams{Limit: 20})
+	entries, err := audit.List(context.Background(), db.ListAuditLogsParams{Lim: 20})
 	if err != nil {
 		t.Fatalf("list audit: %v", err)
 	}
@@ -450,8 +450,8 @@ func TestAudit_DoesNotContainPasswordOrSecret(t *testing.T) {
 	requireAuthSchema2(t, pool)
 
 	q := db.New(pool)
-	audit := NewAuditService(q)
-	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit)
+	audit := NewAuditService(q, nil)
+	svc := NewAuthService(q, AuthConfig{SessionTTLHours: 1}, audit, nil)
 	cleanupAuthData(t, pool)
 
 	admin, _ := svc.CreateFirstAdmin(context.Background(), authTestEmail(), "Admin", "securepassword123")
@@ -460,7 +460,7 @@ func TestAudit_DoesNotContainPasswordOrSecret(t *testing.T) {
 	})
 	time.Sleep(300 * time.Millisecond)
 
-	entries, _ := audit.List(context.Background(), db.ListAuditLogsParams{Limit: 50})
+	entries, _ := audit.List(context.Background(), db.ListAuditLogsParams{Lim: 50})
 	for _, e := range entries {
 		raw := string(e.AfterState) + string(e.BeforeState) + string(e.Changes)
 		if strings.Contains(raw, "securepassword123") {
@@ -477,7 +477,7 @@ func TestNotificationMasking_SMTPPasswordMasked(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewNotificationService(q)
+	svc := NewNotificationService(q, nil)
 
 	ch, err := svc.CreateChannel(context.Background(), "smtp-mask-test", ChannelTypeSMTP, true,
 		[]byte(`{"host":"smtp.test","port":587,"from":"a@b.com","to":["x@y.com"],"password":"supersecret","use_tls":false}`))
@@ -501,7 +501,7 @@ func TestWebhookHeadersMasked(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewNotificationService(q)
+	svc := NewNotificationService(q, nil)
 
 	ch, err := svc.CreateChannel(context.Background(), "wh-mask-test", ChannelTypeWebhook, true,
 		[]byte(`{"url":"http://example.com","headers":{"Authorization":"Bearer secret123","X-Custom":"visible"}}`))
@@ -522,7 +522,7 @@ func TestPublicStatusPage_AccessibleWithoutAuth(t *testing.T) {
 	requireSchema(t, pool)
 
 	q := db.New(pool)
-	svc := NewStatusPageService(q)
+	svc := NewStatusPageService(q, nil)
 	trueBool := true
 	slug := "pub-" + strings.ReplaceAll(time.Now().Format("150405.000"), ".", "")
 	page, err := svc.CreateStatusPage(context.Background(), StatusPageInput{

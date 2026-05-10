@@ -227,7 +227,7 @@ const monitorUptimeWindow = `SELECT
     COUNT(*) AS total_count
 FROM monitor_results
 WHERE monitor_id = $1
-  AND checked_at >= NOW() - ($2 || ' seconds')::interval`
+  AND checked_at >= NOW() - ($2::int || ' seconds')::interval`
 
 type UptimeCounts struct {
 	UpCount    int64

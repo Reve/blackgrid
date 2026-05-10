@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"log/slog"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -111,7 +110,7 @@ func RateLimitMiddleware(r rate.Limit, b int, code string, message string) echo.
 		return func(c echo.Context) error {
 			ip := c.RealIP()
 			if !limiter.GetLimiter(ip).Allow() {
-				return c.JSON(http.StatusTooManyRequests, map[string]string{"error": message})
+				return Error(c, ErrCodeRateLimited, message, nil)
 			}
 			return next(c)
 		}
@@ -160,7 +159,7 @@ func UserRateLimitMiddleware(r rate.Limit, b int, code string, message string) e
 			}
 			userID := uuidStr(user.ID)
 			if !limiter.GetLimiter(userID).Allow() {
-				return c.JSON(http.StatusTooManyRequests, map[string]string{"error": message})
+				return Error(c, ErrCodeRateLimited, message, nil)
 			}
 			return next(c)
 		}

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -20,6 +21,7 @@ type MonitorHandler struct {
 	runner       *monitor.Runner
 	AuditService *service.AuditService
 	bus          *events.EventBus
+	incidentHook monitor.IncidentHook
 }
 
 func NewMonitorHandler(queries *db.Queries, runner *monitor.Runner, audit *service.AuditService, bus *events.EventBus) *MonitorHandler {
@@ -29,6 +31,12 @@ func NewMonitorHandler(queries *db.Queries, runner *monitor.Runner, audit *servi
 		AuditService: audit,
 		bus:          bus,
 	}
+}
+
+// SetIncidentHook wires the incident lifecycle hook so push heartbeat status
+// transitions flow through the same path as scheduled status changes.
+func (h *MonitorHandler) SetIncidentHook(hook monitor.IncidentHook) {
+	h.incidentHook = hook
 }
 
 // validMonitorTypes is the full allowed set for phase 7.
@@ -122,7 +130,7 @@ func (h *MonitorHandler) GetMonitors(c echo.Context) error {
 	ctx := c.Request().Context()
 	monitors, err := h.queries.GetMonitors(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 	out := make([]monitorResponse, len(monitors))
 	for i, m := range monitors {
@@ -137,12 +145,12 @@ func (h *MonitorHandler) GetMonitor(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	m, err := h.queries.GetMonitor(ctx, uuid)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "monitor not found"})
+		return Error(c, ErrCodeNotFound, "monitor not found", nil)
 	}
 
 	return c.JSON(http.StatusOK, toMonitorResponse(m))
@@ -172,19 +180,19 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 	ctx := c.Request().Context()
 	var req createMonitorRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 
 	if req.Name == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "name is required"})
+		return Error(c, ErrCodeValidation, "name is required", nil)
 	}
 	if !validMonitorTypes[req.MonitorType] {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid monitor type"})
+		return Error(c, ErrCodeValidation, "invalid monitor type", nil)
 	}
 
 	// Push monitors don't require a network target
 	if req.MonitorType != "push" && req.Target == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "target is required"})
+		return Error(c, ErrCodeValidation, "target is required", nil)
 	}
 
 	slug := req.Slug
@@ -242,7 +250,7 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 
 		tok, err := monitor.GeneratePushToken()
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate push token"})
+			return Error(c, ErrCodeInternal, "internal error", nil)
 		}
 		plainToken = tok
 		hash := monitor.HashToken(tok)
@@ -264,7 +272,7 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 			json.Unmarshal(config, &pgCfg) //nolint:errcheck
 		}
 		if pgCfg.DSN == "" {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "dsn is required for postgres monitors"})
+			return Error(c, ErrCodeValidation, "dsn is required for postgres monitors", nil)
 		}
 	}
 
@@ -284,7 +292,7 @@ func (h *MonitorHandler) CreateMonitor(c echo.Context) error {
 		PushTokenHash:   tokenHash,
 	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if h.bus != nil {
@@ -313,17 +321,17 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	m, err := h.queries.GetMonitor(ctx, uuid)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "monitor not found"})
+		return Error(c, ErrCodeNotFound, "monitor not found", nil)
 	}
 
 	var req createMonitorRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeValidation, err.Error(), nil)
 	}
 
 	if req.Name != "" {
@@ -334,7 +342,7 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 	}
 	if req.MonitorType != "" {
 		if !validMonitorTypes[req.MonitorType] {
-			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid monitor type"})
+			return Error(c, ErrCodeValidation, "invalid monitor type", nil)
 		}
 		m.MonitorType = req.MonitorType
 	}
@@ -394,7 +402,7 @@ func (h *MonitorHandler) UpdateMonitor(c echo.Context) error {
 	})
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if h.bus != nil {
@@ -469,11 +477,11 @@ func (h *MonitorHandler) DeleteMonitor(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	if err := h.queries.DeleteMonitor(ctx, uuid); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if h.bus != nil {
@@ -504,12 +512,12 @@ func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) 
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	m, err := h.queries.GetMonitor(ctx, uuid)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "monitor not found"})
+		return Error(c, ErrCodeNotFound, "monitor not found", nil)
 	}
 
 	lastStatusChange := m.LastStatusChangeAt
@@ -537,7 +545,7 @@ func (h *MonitorHandler) setStatus(c echo.Context, status string, enabled bool) 
 	})
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	if h.bus != nil && m.Status != status {
@@ -562,22 +570,22 @@ func (h *MonitorHandler) TestMonitor(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	m, err := h.queries.GetMonitor(ctx, uuid)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "monitor not found"})
+		return Error(c, ErrCodeNotFound, "monitor not found", nil)
 	}
 
 	// Push monitors cannot be actively tested
 	if m.MonitorType == "push" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "push monitors cannot be actively tested; use the push endpoint"})
+		return Error(c, ErrCodeValidation, "push monitors cannot be actively tested; use the push endpoint", nil)
 	}
 
 	result, err := h.runner.Run(ctx, m)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	// Update last_checked_at manually (test does not update status)
@@ -610,16 +618,34 @@ func (h *MonitorHandler) GetMonitorResults(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
+	}
+
+	limit := int32(100)
+	offset := int32(0)
+	if v := c.QueryParam("limit"); v != "" {
+		limit = parseIntDefault(v, 100)
+		if limit < 1 {
+			limit = 100
+		}
+		if limit > 1000 {
+			limit = 1000
+		}
+	}
+	if v := c.QueryParam("offset"); v != "" {
+		offset = parseIntDefault(v, 0)
+		if offset < 0 {
+			offset = 0
+		}
 	}
 
 	results, err := h.queries.GetMonitorResults(ctx, db.GetMonitorResultsParams{
 		MonitorID: uuid,
-		Limit:     100,
-		Offset:    0,
+		Limit:     limit,
+		Offset:    offset,
 	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	return c.JSON(http.StatusOK, results)
@@ -631,14 +657,14 @@ func (h *MonitorHandler) ReceivePushHeartbeat(c echo.Context) error {
 	ctx := c.Request().Context()
 	rawToken := c.Param("token")
 	if rawToken == "" {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		return Error(c, ErrCodeNotFound, "not found", nil)
 	}
 
 	hash := monitor.HashToken(rawToken)
 	m, err := h.queries.GetMonitorByPushTokenHash(ctx, pgtype.Text{String: hash, Valid: true})
 	if err != nil {
 		// Return generic 404 to not reveal token existence
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		return Error(c, ErrCodeNotFound, "not found", nil)
 	}
 
 	if !m.Enabled {
@@ -681,31 +707,23 @@ func (h *MonitorHandler) ReceivePushHeartbeat(c echo.Context) error {
 		}(),
 	})
 
-	// Determine new monitor status and update
+	// Determine new monitor status and update via the dedicated heartbeat
+	// query so last_heartbeat_at and last_checked_at both move forward.
 	newStatus := pushedStatus
 	lastStatusChangeAt := m.LastStatusChangeAt
 	if newStatus != m.Status {
 		lastStatusChangeAt = now
 	}
 
-	_, _ = h.queries.UpdateMonitor(ctx, db.UpdateMonitorParams{
+	updated, err := h.queries.RecordPushHeartbeat(ctx, db.RecordPushHeartbeatParams{
 		ID:                 m.ID,
-		Name:               m.Name,
-		Slug:               m.Slug,
-		MonitorType:        m.MonitorType,
-		Target:             m.Target,
-		Config:             m.Config,
-		IpAddressID:        m.IpAddressID,
-		DeviceID:           m.DeviceID,
-		IntervalSeconds:    m.IntervalSeconds,
-		TimeoutSeconds:     m.TimeoutSeconds,
-		RetryCount:         m.RetryCount,
-		Enabled:            m.Enabled,
+		LastHeartbeatAt:    now,
 		Status:             newStatus,
-		LastCheckedAt:      now,
 		LastStatusChangeAt: lastStatusChangeAt,
-		PushTokenHash:      m.PushTokenHash,
 	})
+	if err != nil {
+		return Error(c, ErrCodeInternal, "failed to record heartbeat", nil)
+	}
 
 	if h.bus != nil {
 		// Publish result created
@@ -734,6 +752,14 @@ func (h *MonitorHandler) ReceivePushHeartbeat(c echo.Context) error {
 		}
 	}
 
+	// Route status changes through the same incident lifecycle as scheduled
+	// monitor checks: down/degraded opens an incident, up resolves it.
+	if h.incidentHook != nil && newStatus != m.Status {
+		hookCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		h.incidentHook.OnScheduledStatusChange(hookCtx, updated, m.Status, newStatus)
+	}
+
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -745,21 +771,21 @@ func (h *MonitorHandler) RotatePushToken(c echo.Context) error {
 
 	var uuid pgtype.UUID
 	if err := uuid.Scan(id); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid UUID"})
+		return Error(c, ErrCodeValidation, "invalid UUID", nil)
 	}
 
 	m, err := h.queries.GetMonitor(ctx, uuid)
 	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "monitor not found"})
+		return Error(c, ErrCodeNotFound, "monitor not found", nil)
 	}
 
 	if m.MonitorType != "push" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "only push monitors support token rotation"})
+		return Error(c, ErrCodeValidation, "only push monitors support token rotation", nil)
 	}
 
 	tok, err := monitor.GeneratePushToken()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	hash := monitor.HashToken(tok)
@@ -783,7 +809,7 @@ func (h *MonitorHandler) RotatePushToken(c echo.Context) error {
 		PushTokenHash:      pgtype.Text{String: hash, Valid: true},
 	})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return Error(c, ErrCodeInternal, "internal error", nil)
 	}
 
 	h.AuditService.Log(ctx, service.AuditParams{

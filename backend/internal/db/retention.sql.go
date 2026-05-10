@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const cleanupAuditLogs = `-- name: CleanupAuditLogs :exec
+const cleanupAuditLogs = `-- name: CleanupAuditLogs :execrows
 DELETE FROM audit_log
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
@@ -22,7 +22,7 @@ func (q *Queries) CleanupAuditLogs(ctx context.Context, dollar_1 int32) (int64, 
 	return result.RowsAffected(), nil
 }
 
-const cleanupDiscoveryResults = `-- name: CleanupDiscoveryResults :exec
+const cleanupDiscoveryResults = `-- name: CleanupDiscoveryResults :execrows
 DELETE FROM discovery_results
 WHERE seen_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
@@ -35,7 +35,7 @@ func (q *Queries) CleanupDiscoveryResults(ctx context.Context, dollar_1 int32) (
 	return result.RowsAffected(), nil
 }
 
-const cleanupDiscoveryScans = `-- name: CleanupDiscoveryScans :exec
+const cleanupDiscoveryScans = `-- name: CleanupDiscoveryScans :execrows
 DELETE FROM discovery_scans
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
@@ -48,7 +48,7 @@ func (q *Queries) CleanupDiscoveryScans(ctx context.Context, dollar_1 int32) (in
 	return result.RowsAffected(), nil
 }
 
-const cleanupMonitorResults = `-- name: CleanupMonitorResults :exec
+const cleanupMonitorResults = `-- name: CleanupMonitorResults :execrows
 DELETE FROM monitor_results
 WHERE checked_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
@@ -61,7 +61,7 @@ func (q *Queries) CleanupMonitorResults(ctx context.Context, dollar_1 int32) (in
 	return result.RowsAffected(), nil
 }
 
-const cleanupNotificationDeliveries = `-- name: CleanupNotificationDeliveries :exec
+const cleanupNotificationDeliveries = `-- name: CleanupNotificationDeliveries :execrows
 DELETE FROM notification_deliveries
 WHERE created_at < CURRENT_TIMESTAMP - ($1::int || ' days')::interval
 `
